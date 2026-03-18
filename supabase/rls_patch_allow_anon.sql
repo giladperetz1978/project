@@ -6,6 +6,11 @@ create policy "Public prototype can insert team leads" on public.team_leads for 
 create policy "Public prototype can update team leads" on public.team_leads for update to anon, authenticated using (true);
 create policy "Public prototype can delete team leads" on public.team_leads for delete to anon, authenticated using (true);
 
+create policy "Public prototype can read recruitment processes" on public.recruitment_processes for select to anon, authenticated using (true);
+create policy "Public prototype can insert recruitment processes" on public.recruitment_processes for insert to anon, authenticated with check (true);
+create policy "Public prototype can update recruitment processes" on public.recruitment_processes for update to anon, authenticated using (true);
+create policy "Public prototype can delete recruitment processes" on public.recruitment_processes for delete to anon, authenticated using (true);
+
 create policy "Public prototype can read clients" on public.clients for select to anon, authenticated using (true);
 create policy "Public prototype can insert clients" on public.clients for insert to anon, authenticated with check (true);
 create policy "Public prototype can update clients" on public.clients for update to anon, authenticated using (true);

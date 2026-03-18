@@ -2,6 +2,7 @@
 -- Safe patch for adding DELETE policies only.
 
 create policy "Public prototype can delete team leads" on public.team_leads for delete to anon, authenticated using (true);
+create policy "Public prototype can delete recruitment processes" on public.recruitment_processes for delete to anon, authenticated using (true);
 create policy "Public prototype can delete clients" on public.clients for delete to anon, authenticated using (true);
 create policy "Public prototype can delete projects" on public.projects for delete to anon, authenticated using (true);
 create policy "Public prototype can delete milestones" on public.milestones for delete to anon, authenticated using (true);

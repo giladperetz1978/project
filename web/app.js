@@ -13,10 +13,25 @@ const state = {
       projects: [],
       clients: [],
       teamLeads: [],
+      recruitmentProcesses: [],
       knowledgeItems: [],
       meetings: [],
     },
   },
+};
+
+const recruitmentStatusOrder = ['new', 'sourcing', 'screening', 'interview', 'technical', 'final_interview', 'offer', 'hired', 'on_hold', 'rejected'];
+const recruitmentStatusLabel = {
+  new: 'חדש',
+  sourcing: 'איתור מועמדים',
+  screening: 'סינון',
+  interview: 'ראיון',
+  technical: 'מבדק טכני',
+  final_interview: 'ראיון סופי',
+  offer: 'הצעה',
+  hired: 'התקבל',
+  on_hold: 'מוקפא',
+  rejected: 'נדחה',
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -343,22 +358,53 @@ async function loadClients() {
 }
 
 async function loadTeamWorkload() {
-  const [teamLeadsRes, workloadRes] = await Promise.all([
+  const [teamLeadsRes, workloadRes, recruitmentRes] = await Promise.all([
     state.sb.from('team_leads').select('id,full_name,team_name,domain,email,is_available').order('full_name'),
     state.sb.from('v_team_lead_workload').select('*').order('full_name'),
+    state.sb
+      .from('recruitment_processes')
+      .select('id,team_lead_id,candidate_name,role_title,status,updated_at')
+      .order('updated_at', { ascending: false }),
   ]);
 
-  if (teamLeadsRes.error || workloadRes.error) {
-    showSupabaseError('שגיאה בטעינת עומס העבודה', teamLeadsRes.error || workloadRes.error);
+  if (teamLeadsRes.error || workloadRes.error || recruitmentRes.error) {
+    showSupabaseError('שגיאה בטעינת עומס העבודה', teamLeadsRes.error || workloadRes.error || recruitmentRes.error);
     return;
   }
 
   const workloadById = new Map((workloadRes.data || []).map((item) => [item.team_lead_id, item]));
+  const recruitmentById = new Map();
+  (recruitmentRes.data || []).forEach((item) => {
+    if (!recruitmentById.has(item.team_lead_id)) {
+      recruitmentById.set(item.team_lead_id, []);
+    }
+    recruitmentById.get(item.team_lead_id).push(item);
+  });
+
   state.cache.records.teamLeads = teamLeadsRes.data || [];
+  state.cache.records.recruitmentProcesses = recruitmentRes.data || [];
 
   $('#team-workload').innerHTML = `<h3>עומס עבודה</h3><div class="list">${state.cache.records.teamLeads
     .map((lead) => {
       const workload = workloadById.get(lead.id) || {};
+      const recruitmentItems = (recruitmentById.get(lead.id) || []).sort((left, right) => {
+        const statusGap = recruitmentStatusOrder.indexOf(left.status) - recruitmentStatusOrder.indexOf(right.status);
+        if (statusGap !== 0) return statusGap;
+        return new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime();
+      });
+
+      const recruitmentListHtml = recruitmentItems.length
+        ? `<div class="recruitment-list">${recruitmentItems
+            .map(
+              (item) => `<div class="recruitment-item">
+                <span class="recruitment-status recruitment-status-${item.status}">${recruitmentStatusLabel[item.status] || item.status}</span>
+                <strong>${item.candidate_name}</strong>
+                <span>${item.role_title}</span>
+              </div>`
+            )
+            .join('')}</div>`
+        : '<div class="recruitment-empty">אין כרגע תהליכי גיוס.</div>';
+
       return `<div class="list-item">
         <div class="list-item-head">
           <strong>${lead.full_name}</strong>
@@ -371,6 +417,8 @@ async function loadTeamWorkload() {
         <div>פרויקטים פעילים: ${workload.active_projects || 0}</div>
         <div>משימות פתוחות: ${workload.open_tasks || 0}</div>
         <div>משימות סגורות: ${workload.closed_tasks || 0}</div>
+        <div class="recruitment-head">תהליכי גיוס: ${recruitmentItems.length}</div>
+        ${recruitmentListHtml}
       </div>`;
     })
     .join('')}</div>`;

@@ -5,6 +5,9 @@
 drop policy if exists "Public prototype can delete team leads" on public.team_leads;
 create policy "Public prototype can delete team leads" on public.team_leads for delete to anon, authenticated using (true);
 
+drop policy if exists "Public prototype can delete recruitment processes" on public.recruitment_processes;
+create policy "Public prototype can delete recruitment processes" on public.recruitment_processes for delete to anon, authenticated using (true);
+
 drop policy if exists "Public prototype can delete clients" on public.clients;
 create policy "Public prototype can delete clients" on public.clients for delete to anon, authenticated using (true);
 

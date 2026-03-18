@@ -13,6 +13,7 @@ create type risk_probability as enum ('rare', 'possible', 'likely', 'almost_cert
 create type client_request_type as enum ('feature', 'complaint', 'follow_up', 'other');
 create type alert_type as enum ('project_deadline', 'task_deadline', 'project_overdue', 'client_silence', 'team_overload', 'critical_task');
 create type kb_item_type as enum ('template', 'procedure', 'tip', 'insight');
+create type recruitment_status as enum ('new', 'sourcing', 'screening', 'interview', 'technical', 'final_interview', 'offer', 'hired', 'on_hold', 'rejected');
 
 -- Profiles (optional if you use Supabase Auth)
 create table if not exists public.profiles (
@@ -36,6 +37,20 @@ create table public.team_leads (
   notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
+);
+
+create table public.recruitment_processes (
+  id uuid primary key default gen_random_uuid(),
+  team_lead_id uuid not null references public.team_leads(id) on delete cascade,
+  candidate_name text not null,
+  role_title text not null,
+  status recruitment_status not null default 'new',
+  source_channel text,
+  opened_at date not null default current_date,
+  notes text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (team_lead_id, candidate_name, role_title)
 );
 
 create table public.clients (
@@ -228,6 +243,8 @@ create table public.project_progress_snapshots (
 create index idx_projects_client_id on public.projects(client_id);
 create index idx_projects_team_lead_id on public.projects(team_lead_id);
 create index idx_projects_status on public.projects(status);
+create index idx_recruitment_processes_team_lead_id on public.recruitment_processes(team_lead_id);
+create index idx_recruitment_processes_status on public.recruitment_processes(status);
 create index idx_tasks_project_id on public.tasks(project_id);
 create index idx_tasks_assignee on public.tasks(assignee_team_lead_id);
 create index idx_tasks_status on public.tasks(status);
@@ -250,6 +267,9 @@ end;
 $$;
 
 create trigger set_team_leads_updated_at before update on public.team_leads
+for each row execute function public.set_updated_at();
+
+create trigger set_recruitment_processes_updated_at before update on public.recruitment_processes
 for each row execute function public.set_updated_at();
 
 create trigger set_clients_updated_at before update on public.clients
@@ -346,6 +366,7 @@ select
 -- RLS (basic template - tighten in production)
 alter table public.profiles enable row level security;
 alter table public.team_leads enable row level security;
+alter table public.recruitment_processes enable row level security;
 alter table public.clients enable row level security;
 alter table public.projects enable row level security;
 alter table public.milestones enable row level security;
@@ -366,6 +387,11 @@ create policy "Public prototype can read team leads" on public.team_leads for se
 create policy "Public prototype can insert team leads" on public.team_leads for insert to anon, authenticated with check (true);
 create policy "Public prototype can update team leads" on public.team_leads for update to anon, authenticated using (true);
 create policy "Public prototype can delete team leads" on public.team_leads for delete to anon, authenticated using (true);
+
+create policy "Public prototype can read recruitment processes" on public.recruitment_processes for select to anon, authenticated using (true);
+create policy "Public prototype can insert recruitment processes" on public.recruitment_processes for insert to anon, authenticated with check (true);
+create policy "Public prototype can update recruitment processes" on public.recruitment_processes for update to anon, authenticated using (true);
+create policy "Public prototype can delete recruitment processes" on public.recruitment_processes for delete to anon, authenticated using (true);
 
 create policy "Public prototype can read clients" on public.clients for select to anon, authenticated using (true);
 create policy "Public prototype can insert clients" on public.clients for insert to anon, authenticated with check (true);

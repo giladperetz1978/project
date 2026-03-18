@@ -4,11 +4,13 @@
 - Supabase DB + CRUD
 - דשבורד KPI והתראות
 - מסכי פרויקטים, לקוחות, ראשי צוותים, אנליטיקות, מאגר ידע, פגישות
+- תהליכי גיוס לפי ראש צוות עם כל סטטוסי הגיוס
 - עיצוב תואם מותג Amarel (כחול/כתום)
 
 ## 1) מה יש בפרויקט
 - `supabase/schema.sql` - סכמת DB מלאה (טבלאות, קשרים, FK, Views, Triggers, RLS)
 - `supabase/seed.sql` - נתוני התחלה
+- `supabase/add_recruitment_pipeline_safe.sql` - הוספת תהליכי גיוס בצורה בטוחה לפרויקט קיים
 - `web/index.html` - UI ראשי
 - `web/styles.css` - עיצוב
 - `web/app.js` - Supabase integration + CRUD + charts
