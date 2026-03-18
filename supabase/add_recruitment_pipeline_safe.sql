@@ -16,6 +16,7 @@ create table if not exists public.recruitment_processes (
   candidate_name text not null,
   role_title text not null,
   status recruitment_status not null default 'new',
+  current_stage_template_id uuid,
   source_channel text,
   opened_at date not null default current_date,
   next_status_check_date date,
@@ -28,6 +29,7 @@ create table if not exists public.recruitment_processes (
 
 alter table public.recruitment_processes add column if not exists next_status_check_date date;
 alter table public.recruitment_processes add column if not exists reminder_enabled boolean not null default true;
+alter table public.recruitment_processes add column if not exists current_stage_template_id uuid;
 
 create table if not exists public.recruitment_process_steps (
   id uuid primary key default gen_random_uuid(),
@@ -61,17 +63,38 @@ create table if not exists public.recruitment_positions (
   updated_at timestamptz not null default now()
 );
 
+alter table public.recruitment_processes
+  drop constraint if exists recruitment_processes_current_stage_template_id_fkey;
+
+alter table public.recruitment_processes
+  add constraint recruitment_processes_current_stage_template_id_fkey
+  foreign key (current_stage_template_id)
+  references public.recruitment_stage_templates(id)
+  on delete set null;
+
+create table if not exists public.recruitment_process_positions (
+  id uuid primary key default gen_random_uuid(),
+  recruitment_process_id uuid not null references public.recruitment_processes(id) on delete cascade,
+  position_id uuid not null references public.recruitment_positions(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  unique (recruitment_process_id, position_id)
+);
+
 create index if not exists idx_recruitment_processes_team_lead_id on public.recruitment_processes(team_lead_id);
 create index if not exists idx_recruitment_processes_status on public.recruitment_processes(status);
 create index if not exists idx_recruitment_process_steps_process_id on public.recruitment_process_steps(recruitment_process_id);
 create index if not exists idx_recruitment_process_steps_status on public.recruitment_process_steps(step_status);
 create index if not exists idx_recruitment_stage_templates_sort_order on public.recruitment_stage_templates(sort_order);
 create index if not exists idx_recruitment_positions_active on public.recruitment_positions(is_active);
+create index if not exists idx_recruitment_processes_stage_template on public.recruitment_processes(current_stage_template_id);
+create index if not exists idx_recruitment_process_positions_process_id on public.recruitment_process_positions(recruitment_process_id);
+create index if not exists idx_recruitment_process_positions_position_id on public.recruitment_process_positions(position_id);
 
 alter table public.recruitment_processes enable row level security;
 alter table public.recruitment_process_steps enable row level security;
 alter table public.recruitment_stage_templates enable row level security;
 alter table public.recruitment_positions enable row level security;
+alter table public.recruitment_process_positions enable row level security;
 
 drop policy if exists "Public prototype can read recruitment processes" on public.recruitment_processes;
 create policy "Public prototype can read recruitment processes" on public.recruitment_processes for select to anon, authenticated using (true);
@@ -121,6 +144,18 @@ create policy "Public prototype can update recruitment positions" on public.recr
 drop policy if exists "Public prototype can delete recruitment positions" on public.recruitment_positions;
 create policy "Public prototype can delete recruitment positions" on public.recruitment_positions for delete to anon, authenticated using (true);
 
+drop policy if exists "Public prototype can read recruitment process positions" on public.recruitment_process_positions;
+create policy "Public prototype can read recruitment process positions" on public.recruitment_process_positions for select to anon, authenticated using (true);
+
+drop policy if exists "Public prototype can insert recruitment process positions" on public.recruitment_process_positions;
+create policy "Public prototype can insert recruitment process positions" on public.recruitment_process_positions for insert to anon, authenticated with check (true);
+
+drop policy if exists "Public prototype can update recruitment process positions" on public.recruitment_process_positions;
+create policy "Public prototype can update recruitment process positions" on public.recruitment_process_positions for update to anon, authenticated using (true);
+
+drop policy if exists "Public prototype can delete recruitment process positions" on public.recruitment_process_positions;
+create policy "Public prototype can delete recruitment process positions" on public.recruitment_process_positions for delete to anon, authenticated using (true);
+
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql
@@ -146,6 +181,27 @@ for each row execute function public.set_updated_at();
 drop trigger if exists set_recruitment_positions_updated_at on public.recruitment_positions;
 create trigger set_recruitment_positions_updated_at before update on public.recruitment_positions
 for each row execute function public.set_updated_at();
+
+insert into public.recruitment_stage_templates (stage_name, sort_order, description, is_active)
+values
+  ('חדש', 10, 'פתיחת תהליך גיוס', true),
+  ('איתור', 20, 'איתור מועמדים', true),
+  ('סינון', 30, 'סינון קורות חיים ושיחה ראשונית', true),
+  ('ראיון', 40, 'שלב ראיונות', true),
+  ('מבדק טכני', 50, 'בדיקה מקצועית', true),
+  ('ראיון סופי', 60, 'ראיון סיכום', true),
+  ('הצעה', 70, 'הצעת שכר', true),
+  ('התקבל', 80, 'התקבל לעבודה', true),
+  ('מוקפא', 90, 'הקפאת תהליך', true),
+  ('נדחה', 100, 'סיום ללא גיוס', true)
+on conflict (stage_name) do nothing;
+
+insert into public.recruitment_positions (position_name, position_profile, is_active)
+values
+  ('Frontend Developer', 'פיתוח צד לקוח, React, UX בסיסי ועבודה עם API', true),
+  ('Data Analyst', 'ניתוח נתונים, דוחות BI ו-SQL מתקדם', true),
+  ('DevOps Engineer', 'CI/CD, ענן, אוטומציה ותמיכה בסביבות פרודקשן', true)
+on conflict (position_name) do nothing;
 
 with seed(preferred_team_lead, candidate_name, role_title, status, source_channel, opened_at, notes) as (
   values
@@ -210,14 +266,29 @@ mapped as (
     sr.candidate_name,
     sr.role_title,
     sr.status::recruitment_status as status,
+    rst.id as stage_template_id,
     sr.source_channel,
     sr.opened_at,
     sr.notes
   from seed_ranked sr
   left join public.team_leads exact on exact.full_name = sr.preferred_team_lead
+  left join public.recruitment_stage_templates rst
+    on rst.stage_name = case sr.status
+      when 'new' then 'חדש'
+      when 'sourcing' then 'איתור'
+      when 'screening' then 'סינון'
+      when 'interview' then 'ראיון'
+      when 'technical' then 'מבדק טכני'
+      when 'final_interview' then 'ראיון סופי'
+      when 'offer' then 'הצעה'
+      when 'hired' then 'התקבל'
+      when 'on_hold' then 'מוקפא'
+      when 'rejected' then 'נדחה'
+      else 'חדש'
+    end
 )
-insert into public.recruitment_processes (team_lead_id, candidate_name, role_title, status, source_channel, opened_at, notes)
-select team_lead_id, candidate_name, role_title, status, source_channel, opened_at, notes
+insert into public.recruitment_processes (team_lead_id, candidate_name, role_title, status, current_stage_template_id, source_channel, opened_at, notes)
+select team_lead_id, candidate_name, role_title, status, stage_template_id, source_channel, opened_at, notes
 from mapped
 where team_lead_id is not null
 on conflict do nothing;

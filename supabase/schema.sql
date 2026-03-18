@@ -45,6 +45,7 @@ create table public.recruitment_processes (
   candidate_name text not null,
   role_title text not null,
   status recruitment_status not null default 'new',
+  current_stage_template_id uuid,
   source_channel text,
   opened_at date not null default current_date,
   next_status_check_date date,
@@ -85,6 +86,20 @@ create table public.recruitment_positions (
   is_active boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
+);
+
+alter table public.recruitment_processes
+  add constraint recruitment_processes_current_stage_template_id_fkey
+  foreign key (current_stage_template_id)
+  references public.recruitment_stage_templates(id)
+  on delete set null;
+
+create table public.recruitment_process_positions (
+  id uuid primary key default gen_random_uuid(),
+  recruitment_process_id uuid not null references public.recruitment_processes(id) on delete cascade,
+  position_id uuid not null references public.recruitment_positions(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  unique (recruitment_process_id, position_id)
 );
 
 create table public.clients (
@@ -283,6 +298,9 @@ create index idx_recruitment_process_steps_process_id on public.recruitment_proc
 create index idx_recruitment_process_steps_status on public.recruitment_process_steps(step_status);
 create index idx_recruitment_stage_templates_sort_order on public.recruitment_stage_templates(sort_order);
 create index idx_recruitment_positions_active on public.recruitment_positions(is_active);
+create index idx_recruitment_processes_stage_template on public.recruitment_processes(current_stage_template_id);
+create index idx_recruitment_process_positions_process_id on public.recruitment_process_positions(recruitment_process_id);
+create index idx_recruitment_process_positions_position_id on public.recruitment_process_positions(position_id);
 create index idx_tasks_project_id on public.tasks(project_id);
 create index idx_tasks_assignee on public.tasks(assignee_team_lead_id);
 create index idx_tasks_status on public.tasks(status);
@@ -417,6 +435,7 @@ alter table public.recruitment_processes enable row level security;
 alter table public.recruitment_process_steps enable row level security;
 alter table public.recruitment_stage_templates enable row level security;
 alter table public.recruitment_positions enable row level security;
+alter table public.recruitment_process_positions enable row level security;
 alter table public.clients enable row level security;
 alter table public.projects enable row level security;
 alter table public.milestones enable row level security;
@@ -457,6 +476,11 @@ create policy "Public prototype can read recruitment positions" on public.recrui
 create policy "Public prototype can insert recruitment positions" on public.recruitment_positions for insert to anon, authenticated with check (true);
 create policy "Public prototype can update recruitment positions" on public.recruitment_positions for update to anon, authenticated using (true);
 create policy "Public prototype can delete recruitment positions" on public.recruitment_positions for delete to anon, authenticated using (true);
+
+create policy "Public prototype can read recruitment process positions" on public.recruitment_process_positions for select to anon, authenticated using (true);
+create policy "Public prototype can insert recruitment process positions" on public.recruitment_process_positions for insert to anon, authenticated with check (true);
+create policy "Public prototype can update recruitment process positions" on public.recruitment_process_positions for update to anon, authenticated using (true);
+create policy "Public prototype can delete recruitment process positions" on public.recruitment_process_positions for delete to anon, authenticated using (true);
 
 create policy "Public prototype can read clients" on public.clients for select to anon, authenticated using (true);
 create policy "Public prototype can insert clients" on public.clients for insert to anon, authenticated with check (true);

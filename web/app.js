@@ -17,12 +17,14 @@ const state = {
       recruitmentProcessSteps: [],
       recruitmentStages: [],
       positions: [],
+      recruitmentProcessPositions: [],
       knowledgeItems: [],
       meetings: [],
     },
   },
   features: {
     recruitmentWorkflow: false,
+    recruitmentMasterTables: false,
   },
 };
 
@@ -83,7 +85,41 @@ function isMissingRecruitmentMasterTableError(error) {
   if (!error) return false;
   const message = String(error.message || '').toLowerCase();
   const code = String(error.code || '').toLowerCase();
-  return code === 'pgrst205' || message.includes('recruitment_stage_templates') || message.includes('recruitment_positions');
+  return (
+    code === 'pgrst205' ||
+    message.includes('recruitment_stage_templates') ||
+    message.includes('recruitment_positions') ||
+    message.includes('recruitment_process_positions') ||
+    message.includes('current_stage_template_id')
+  );
+}
+
+function getActiveRecruitmentStages() {
+  return (state.cache.records.recruitmentStages || []).filter((item) => item.is_active);
+}
+
+function renderRecruitmentPositionOptions(selectedIds = []) {
+  const host = $('#recruitment-position-options');
+  if (!host) return;
+
+  if (!state.features.recruitmentMasterTables) {
+    host.innerHTML = '<div class="recruitment-warning">יש להריץ add_recruitment_pipeline_safe.sql כדי לקשר תקנים למגויס.</div>';
+    return;
+  }
+
+  const selectedSet = new Set(selectedIds);
+  const activePositions = (state.cache.records.positions || []).filter((item) => item.is_active);
+  if (!activePositions.length) {
+    host.innerHTML = '<div class="recruitment-step-empty">אין תקנים פעילים. צור קודם תקן בטאב תקנים.</div>';
+    return;
+  }
+
+  host.innerHTML = `<div class="recruitment-positions-title">תקנים למגויס</div>
+    <div class="recruitment-positions-grid">${activePositions
+      .map(
+        (item) => `<label class="check-line"><input type="checkbox" name="recruitment_position_ids" value="${item.id}" ${selectedSet.has(item.id) ? 'checked' : ''} /> ${item.position_name}</label>`
+      )
+      .join('')}</div>`;
 }
 
 function updateSupabaseStatus(stateName, note) {
@@ -239,7 +275,11 @@ function resetRecruitmentForm() {
   form.reset();
   form.elements.id.value = '';
   form.elements.reminder_enabled.checked = true;
+  if (form.elements.current_stage_template_id) {
+    form.elements.current_stage_template_id.value = '';
+  }
   setFormMode('recruitment', false);
+  renderRecruitmentPositionOptions();
 }
 
 function resetKnowledgeForm() {
@@ -285,14 +325,13 @@ async function loadAll() {
   if (!state.sb) return;
 
   await loadLookups();
+  await Promise.all([loadRecruitmentStages(), loadPositions()]);
   await Promise.all([
     loadDashboard(),
     loadProjectsTable(),
     loadClients(),
     loadTeamWorkload(),
     loadRecruitmentBoard(),
-    loadRecruitmentStages(),
-    loadPositions(),
     loadAnalytics(),
     loadKnowledge(),
     loadMeetings(),
@@ -439,7 +478,7 @@ async function loadTeamWorkload() {
     state.sb.from('v_team_lead_workload').select('*').order('full_name'),
     state.sb
       .from('recruitment_processes')
-      .select('id,team_lead_id,candidate_name,role_title,status,updated_at')
+      .select('id,team_lead_id,candidate_name,role_title,status,current_stage_template_id,updated_at,recruitment_stage_templates(stage_name)')
       .order('updated_at', { ascending: false }),
   ]);
 
@@ -481,7 +520,7 @@ async function loadTeamWorkload() {
         ? `<div class="recruitment-list">${recruitmentItems
             .map(
               (item) => `<div class="recruitment-item">
-                <span class="recruitment-status recruitment-status-${item.status}">${recruitmentStatusLabel[item.status] || item.status}</span>
+                <span class="recruitment-status recruitment-status-${item.status}">${item.recruitment_stage_templates?.stage_name || recruitmentStatusLabel[item.status] || item.status}</span>
                 <strong>${item.candidate_name}</strong>
                 <span>${item.role_title}</span>
               </div>`
@@ -514,11 +553,12 @@ async function loadRecruitmentBoard() {
 
   let records = [];
   let hasWorkflowSchema = true;
+  let hasMasterTables = true;
 
   const extendedRes = await state.sb
     .from('recruitment_processes')
     .select(
-      'id,team_lead_id,candidate_name,role_title,status,next_status_check_date,reminder_enabled,notes,updated_at,team_leads(full_name,team_name),recruitment_process_steps(id,step_name,step_status,next_check_date,reminder_enabled,notes,updated_at)'
+      'id,team_lead_id,candidate_name,role_title,status,current_stage_template_id,next_status_check_date,reminder_enabled,notes,updated_at,team_leads(full_name,team_name),recruitment_stage_templates(id,stage_name,sort_order),recruitment_process_steps(id,step_name,step_status,next_check_date,reminder_enabled,notes,updated_at),recruitment_process_positions(position_id,recruitment_positions(id,position_name))'
     )
     .order('updated_at', { ascending: false });
 
@@ -529,8 +569,9 @@ async function loadRecruitmentBoard() {
       return;
     }
 
-    if (isMissingRecruitmentWorkflowSchemaError(extendedRes.error)) {
-      hasWorkflowSchema = false;
+    if (isMissingRecruitmentWorkflowSchemaError(extendedRes.error) || isMissingRecruitmentMasterTableError(extendedRes.error)) {
+      hasWorkflowSchema = !isMissingRecruitmentWorkflowSchemaError(extendedRes.error);
+      hasMasterTables = !isMissingRecruitmentMasterTableError(extendedRes.error);
       const baseRes = await state.sb
         .from('recruitment_processes')
         .select('id,team_lead_id,candidate_name,role_title,status,notes,updated_at,team_leads(full_name,team_name)')
@@ -540,7 +581,7 @@ async function loadRecruitmentBoard() {
         showSupabaseError('שגיאה בטעינת פייפליין הגיוסים', baseRes.error);
         return;
       }
-      records = (baseRes.data || []).map((item) => ({ ...item, recruitment_process_steps: [] }));
+      records = (baseRes.data || []).map((item) => ({ ...item, recruitment_process_steps: [], recruitment_process_positions: [] }));
     } else {
       showSupabaseError('שגיאה בטעינת פייפליין הגיוסים', extendedRes.error);
       return;
@@ -550,26 +591,47 @@ async function loadRecruitmentBoard() {
   }
 
   state.features.recruitmentWorkflow = hasWorkflowSchema;
+  state.features.recruitmentMasterTables = hasMasterTables;
   state.cache.records.recruitmentProcesses = records;
   state.cache.records.recruitmentProcessSteps = records.flatMap((item) =>
     (item.recruitment_process_steps || []).map((step) => ({ ...step, recruitment_process_id: item.id }))
   );
+  state.cache.records.recruitmentProcessPositions = records.flatMap((item) =>
+    (item.recruitment_process_positions || []).map((link) => ({ ...link, recruitment_process_id: item.id }))
+  );
+
+  renderRecruitmentPositionOptions();
 
   if (!records.length) {
     host.innerHTML = '<p>אין כרגע תהליכי גיוס.</p>';
     return;
   }
 
-  const schemaNote = hasWorkflowSchema
-    ? ''
-    : '<p class="recruitment-warning">לא זוהו עמודות/טבלת שלבי תהליך. יש להריץ: supabase/add_recruitment_pipeline_safe.sql</p>';
+  const warnings = [];
+  if (!hasWorkflowSchema) {
+    warnings.push('<p class="recruitment-warning">לא זוהו עמודות/טבלת שלבי תהליך. יש להריץ: supabase/add_recruitment_pipeline_safe.sql</p>');
+  }
+  if (!hasMasterTables) {
+    warnings.push('<p class="recruitment-warning">לא זוהו טבלאות שלבי גיוס/תקנים. יש להריץ: supabase/add_recruitment_pipeline_safe.sql</p>');
+  }
 
-  host.innerHTML = `${schemaNote}<div class="recruitment-board-grid">${recruitmentStatusOrder
-    .map((status) => {
-      const items = records.filter((item) => item.status === status);
+  const activeStages = getActiveRecruitmentStages();
+  const columnDefs = activeStages.length
+    ? [...activeStages.map((stage) => ({ key: stage.id, label: stage.stage_name })), { key: '__unassigned', label: 'ללא שלב' }]
+    : recruitmentStatusOrder.map((status) => ({ key: status, label: recruitmentStatusLabel[status] || status }));
+
+  host.innerHTML = `${warnings.join('')}<div class="recruitment-board-grid">${columnDefs
+    .map((column) => {
+      const items = records.filter((item) => {
+        if (activeStages.length) {
+          if (!item.current_stage_template_id) return column.key === '__unassigned';
+          return item.current_stage_template_id === column.key;
+        }
+        return item.status === column.key;
+      });
       return `<article class="recruitment-column">
         <header>
-          <h4>${recruitmentStatusLabel[status] || status}</h4>
+          <h4>${column.label}</h4>
           <span>${items.length}</span>
         </header>
         <div class="recruitment-column-list">
@@ -580,6 +642,9 @@ async function loadRecruitmentBoard() {
                     const steps = (item.recruitment_process_steps || []).sort(
                       (left, right) => new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime()
                     );
+                    const linkedPositions = (item.recruitment_process_positions || [])
+                      .map((link) => link.recruitment_positions?.position_name)
+                      .filter(Boolean);
                     const activeStep = steps.find((step) => step.step_status === 'in_progress');
 
                     return `<div class="recruitment-card">
@@ -589,7 +654,8 @@ async function loadRecruitmentBoard() {
               </div>
               <div>${item.role_title}</div>
               <small>${item.team_leads?.full_name || 'ללא ראש צוות'}${item.team_leads?.team_name ? ` | ${item.team_leads.team_name}` : ''}</small>
-              <small>סטטוס גיוס: ${recruitmentStatusLabel[item.status] || item.status}</small>
+              <small>שלב גיוס: ${item.recruitment_stage_templates?.stage_name || (activeStages.length ? 'ללא שלב' : recruitmentStatusLabel[item.status] || item.status)}</small>
+              <small>תקנים: ${linkedPositions.length ? linkedPositions.join(', ') : 'ללא תקן משויך'}</small>
               <small>שלב נוכחי: ${activeStep?.step_name || 'לא הוגדר'}</small>
               <small>בדיקת סטטוס הבאה: ${item.next_status_check_date || '-'}</small>
               <small>התראה: ${item.reminder_enabled === false ? 'כבויה' : 'פעילה'}</small>
@@ -653,7 +719,8 @@ async function loadRecruitmentBoard() {
 
 async function loadRecruitmentStages() {
   const host = $('#recruitment-stage-list');
-  if (!host) return;
+  const stageSelect = $('#recruitment-stage-template');
+  if (!host && !stageSelect) return;
 
   const { data, error } = await state.sb
     .from('recruitment_stage_templates')
@@ -663,14 +730,24 @@ async function loadRecruitmentStages() {
 
   if (error) {
     if (isMissingRecruitmentMasterTableError(error)) {
-      host.innerHTML = '<h3>רשימת שלבי גיוס</h3><p>יש להריץ את add_recruitment_pipeline_safe.sql כדי ליצור את הטבלה.</p>';
+      state.features.recruitmentMasterTables = false;
+      if (host) {
+        host.innerHTML = '<h3>רשימת שלבי גיוס</h3><p>יש להריץ את add_recruitment_pipeline_safe.sql כדי ליצור את הטבלה.</p>';
+      }
       return;
     }
     showSupabaseError('שגיאה בטעינת שלבי גיוס', error);
     return;
   }
 
+  state.features.recruitmentMasterTables = true;
   state.cache.records.recruitmentStages = data || [];
+
+  if (stageSelect) {
+    fillSelect(stageSelect, getActiveRecruitmentStages(), 'בחר שלב גיוס', (item) => item.id, (item) => item.stage_name);
+  }
+
+  if (!host) return;
 
   host.innerHTML = `<h3>רשימת שלבי גיוס</h3><div class="list">${state.cache.records.recruitmentStages
     .map(
@@ -689,7 +766,7 @@ async function loadRecruitmentStages() {
 
 async function loadPositions() {
   const host = $('#positions-list');
-  if (!host) return;
+  if (!host && !$('#recruitment-position-options')) return;
 
   const { data, error } = await state.sb
     .from('recruitment_positions')
@@ -698,14 +775,22 @@ async function loadPositions() {
 
   if (error) {
     if (isMissingRecruitmentMasterTableError(error)) {
-      host.innerHTML = '<h3>רשימת תקנים</h3><p>יש להריץ את add_recruitment_pipeline_safe.sql כדי ליצור את הטבלה.</p>';
+      state.features.recruitmentMasterTables = false;
+      if (host) {
+        host.innerHTML = '<h3>רשימת תקנים</h3><p>יש להריץ את add_recruitment_pipeline_safe.sql כדי ליצור את הטבלה.</p>';
+      }
+      renderRecruitmentPositionOptions();
       return;
     }
     showSupabaseError('שגיאה בטעינת תקנים', error);
     return;
   }
 
+  state.features.recruitmentMasterTables = true;
   state.cache.records.positions = data || [];
+  renderRecruitmentPositionOptions();
+
+  if (!host) return;
 
   host.innerHTML = `<h3>רשימת תקנים</h3><div class="list">${state.cache.records.positions
     .map(
@@ -942,7 +1027,9 @@ function editRecruitment(id) {
   form.elements.candidate_name.value = process.candidate_name || '';
   form.elements.role_title.value = process.role_title || '';
   form.elements.team_lead_id.value = process.team_lead_id || '';
-  form.elements.status.value = process.status || 'new';
+  if (form.elements.current_stage_template_id) {
+    form.elements.current_stage_template_id.value = process.current_stage_template_id || '';
+  }
   form.elements.notes.value = process.notes || '';
 
   if (form.elements.next_status_check_date) {
@@ -951,6 +1038,9 @@ function editRecruitment(id) {
   if (form.elements.reminder_enabled) {
     form.elements.reminder_enabled.checked = process.reminder_enabled !== false;
   }
+
+  const selectedPositions = (process.recruitment_process_positions || []).map((link) => link.position_id);
+  renderRecruitmentPositionOptions(selectedPositions);
 
   setFormMode('recruitment', true);
 }
@@ -1156,11 +1246,12 @@ function wireForms() {
     if (!state.sb) return showMessage('יש להתחבר קודם ל-Supabase');
 
     const form = event.target;
+    const selectedPositionIds = Array.from(form.querySelectorAll('input[name="recruitment_position_ids"]:checked')).map((input) => input.value);
     const payload = {
       candidate_name: form.elements.candidate_name.value,
       role_title: form.elements.role_title.value,
       team_lead_id: form.elements.team_lead_id.value || null,
-      status: form.elements.status.value,
+      status: 'new',
       notes: form.elements.notes.value || null,
     };
 
@@ -1168,14 +1259,34 @@ function wireForms() {
       payload.next_status_check_date = form.elements.next_status_check_date.value || null;
       payload.reminder_enabled = form.elements.reminder_enabled.checked;
     }
+    if (state.features.recruitmentMasterTables && form.elements.current_stage_template_id) {
+      payload.current_stage_template_id = form.elements.current_stage_template_id.value || null;
+    }
 
     const recordId = form.elements.id.value;
-    const query = recordId
-      ? state.sb.from('recruitment_processes').update(payload).eq('id', recordId)
-      : state.sb.from('recruitment_processes').insert(payload);
-    const { error } = await query;
+    let processId = recordId;
+    let error;
+
+    if (recordId) {
+      ({ error } = await state.sb.from('recruitment_processes').update(payload).eq('id', recordId));
+    } else {
+      const insertRes = await state.sb.from('recruitment_processes').insert(payload).select('id').single();
+      error = insertRes.error;
+      processId = insertRes.data?.id;
+    }
 
     if (error) return showSupabaseError('שמירת מגויס נכשלה', error);
+
+    if (state.features.recruitmentMasterTables && processId) {
+      const { error: clearError } = await state.sb.from('recruitment_process_positions').delete().eq('recruitment_process_id', processId);
+      if (clearError) return showSupabaseError('עדכון תקני המגויס נכשל', clearError);
+
+      if (selectedPositionIds.length) {
+        const linksPayload = selectedPositionIds.map((positionId) => ({ recruitment_process_id: processId, position_id: positionId }));
+        const { error: linksError } = await state.sb.from('recruitment_process_positions').insert(linksPayload);
+        if (linksError) return showSupabaseError('שמירת תקני המגויס נכשלה', linksError);
+      }
+    }
 
     resetRecruitmentForm();
     await loadRecruitmentBoard();
@@ -1209,6 +1320,7 @@ function wireForms() {
       if (error) return showSupabaseError('הוספת שלב תהליך נכשלה', error);
 
       if (payload.step_status === 'in_progress') {
+        const matchedStage = (state.cache.records.recruitmentStages || []).find((item) => item.stage_name === payload.step_name && item.is_active);
         await state.sb
           .from('recruitment_process_steps')
           .update({ step_status: 'pending' })
@@ -1218,7 +1330,11 @@ function wireForms() {
 
         await state.sb
           .from('recruitment_processes')
-          .update({ next_status_check_date: payload.next_check_date, reminder_enabled: payload.reminder_enabled })
+          .update({
+            next_status_check_date: payload.next_check_date,
+            reminder_enabled: payload.reminder_enabled,
+            current_stage_template_id: matchedStage?.id || null,
+          })
           .eq('id', processId);
       }
 
@@ -1250,9 +1366,14 @@ function wireForms() {
     if (stepUpdateError) return showSupabaseError('שמירת שלב תהליך נכשלה', stepUpdateError);
 
     if (updatePayload.step_status === 'in_progress') {
+      const matchedStage = (state.cache.records.recruitmentStages || []).find((item) => item.stage_name === updatePayload.step_name && item.is_active);
       const { error: processUpdateError } = await state.sb
         .from('recruitment_processes')
-        .update({ next_status_check_date: updatePayload.next_check_date, reminder_enabled: updatePayload.reminder_enabled })
+        .update({
+          next_status_check_date: updatePayload.next_check_date,
+          reminder_enabled: updatePayload.reminder_enabled,
+          current_stage_template_id: matchedStage?.id || null,
+        })
         .eq('id', processId);
       if (processUpdateError) return showSupabaseError('עדכון תאריך בדיקה נכשל', processUpdateError);
     }
@@ -1281,6 +1402,7 @@ function wireForms() {
       const process = state.cache.records.recruitmentProcesses.find((item) => item.id === processId);
       const step = (process?.recruitment_process_steps || []).find((item) => item.id === stepId);
       if (!process || !step) return;
+      const matchedStage = (state.cache.records.recruitmentStages || []).find((item) => item.stage_name === step.step_name && item.is_active);
 
       await state.sb
         .from('recruitment_process_steps')
@@ -1293,7 +1415,11 @@ function wireForms() {
 
       const { error: processError } = await state.sb
         .from('recruitment_processes')
-        .update({ next_status_check_date: step.next_check_date, reminder_enabled: step.reminder_enabled })
+        .update({
+          next_status_check_date: step.next_check_date,
+          reminder_enabled: step.reminder_enabled,
+          current_stage_template_id: matchedStage?.id || null,
+        })
         .eq('id', processId);
       if (processError) return showSupabaseError('עדכון תאריך בדיקה נכשל', processError);
 
@@ -1323,6 +1449,7 @@ function wireForms() {
 
     resetRecruitmentStageForm();
     await loadRecruitmentStages();
+    await loadRecruitmentBoard();
   });
 
   $('#position-form').addEventListener('submit', async (event) => {
@@ -1346,6 +1473,7 @@ function wireForms() {
 
     resetPositionForm();
     await loadPositions();
+    await loadRecruitmentBoard();
   });
 
   $('#project-cancel-edit').addEventListener('click', resetProjectForm);

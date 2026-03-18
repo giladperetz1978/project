@@ -523,6 +523,26 @@ td {
   color: #41566f;
 }
 
+.recruitment-positions-picker {
+  grid-column: span 4;
+  border: 1px solid #dbe6f1;
+  border-radius: 10px;
+  padding: 8px;
+  background: #fbfdff;
+}
+
+.recruitment-positions-title {
+  font-weight: 700;
+  margin-bottom: 6px;
+  color: var(--accent);
+}
+
+.recruitment-positions-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
 .recruitment-warning {
   margin-top: 0;
   margin-bottom: 10px;
@@ -653,6 +673,10 @@ td {
   .form-grid button,
   .form-grid .check-line {
     grid-column: span 2;
+  }
+
+  .recruitment-positions-grid {
+    grid-template-columns: 1fr;
   }
 
   .supabase-config {

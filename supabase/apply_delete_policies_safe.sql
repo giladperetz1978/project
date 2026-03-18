@@ -41,6 +41,15 @@ begin
 end;
 $$;
 
+do $$
+begin
+	if to_regclass('public.recruitment_process_positions') is not null then
+		execute 'drop policy if exists "Public prototype can delete recruitment process positions" on public.recruitment_process_positions';
+		execute 'create policy "Public prototype can delete recruitment process positions" on public.recruitment_process_positions for delete to anon, authenticated using (true)';
+	end if;
+end;
+$$;
+
 drop policy if exists "Public prototype can delete clients" on public.clients;
 create policy "Public prototype can delete clients" on public.clients for delete to anon, authenticated using (true);
 
