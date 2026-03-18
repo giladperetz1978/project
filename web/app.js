@@ -46,6 +46,13 @@ function showSupabaseError(context, error) {
   showMessage(`${context}: ${message}`);
 }
 
+function isMissingRecruitmentTableError(error) {
+  if (!error) return false;
+  const message = String(error.message || '').toLowerCase();
+  const code = String(error.code || '').toLowerCase();
+  return code === 'pgrst205' || (message.includes("public.recruitment_processes") && message.includes('schema cache'));
+}
+
 function updateSupabaseStatus(stateName, note) {
   const statusEl = $('#supabase-status');
   const noteEl = $('#connection-note');
@@ -368,14 +375,22 @@ async function loadTeamWorkload() {
       .order('updated_at', { ascending: false }),
   ]);
 
-  if (teamLeadsRes.error || workloadRes.error || recruitmentRes.error) {
-    showSupabaseError('שגיאה בטעינת עומס העבודה', teamLeadsRes.error || workloadRes.error || recruitmentRes.error);
+  if (teamLeadsRes.error || workloadRes.error) {
+    showSupabaseError('שגיאה בטעינת עומס העבודה', teamLeadsRes.error || workloadRes.error);
     return;
   }
 
+  const recruitmentTableMissing = isMissingRecruitmentTableError(recruitmentRes.error);
+  if (recruitmentRes.error && !recruitmentTableMissing) {
+    showSupabaseError('שגיאה בטעינת עומס העבודה', recruitmentRes.error);
+    return;
+  }
+
+  const recruitmentRows = recruitmentTableMissing ? [] : recruitmentRes.data || [];
+
   const workloadById = new Map((workloadRes.data || []).map((item) => [item.team_lead_id, item]));
   const recruitmentById = new Map();
-  (recruitmentRes.data || []).forEach((item) => {
+  recruitmentRows.forEach((item) => {
     if (!recruitmentById.has(item.team_lead_id)) {
       recruitmentById.set(item.team_lead_id, []);
     }
@@ -383,7 +398,7 @@ async function loadTeamWorkload() {
   });
 
   state.cache.records.teamLeads = teamLeadsRes.data || [];
-  state.cache.records.recruitmentProcesses = recruitmentRes.data || [];
+  state.cache.records.recruitmentProcesses = recruitmentRows;
 
   $('#team-workload').innerHTML = `<h3>עומס עבודה</h3><div class="list">${state.cache.records.teamLeads
     .map((lead) => {
@@ -435,6 +450,11 @@ async function loadRecruitmentBoard() {
     .order('updated_at', { ascending: false });
 
   if (error) {
+    if (isMissingRecruitmentTableError(error)) {
+      host.innerHTML = `<p>טבלת הגיוסים עדיין לא קיימת ב-Supabase.</p>
+        <p>יש להריץ את הסקריפט: supabase/add_recruitment_pipeline_safe.sql</p>`;
+      return;
+    }
     showSupabaseError('שגיאה בטעינת פייפליין הגיוסים', error);
     return;
   }
