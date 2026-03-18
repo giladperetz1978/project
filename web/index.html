@@ -7,11 +7,11 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css?v=20260318c" />
+    <link rel="stylesheet" href="styles.css?v=20260318d" />
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-    <script src="config.local.js?v=20260318c"></script>
-    <script defer src="app.js?v=20260318c"></script>
+    <script src="config.local.js?v=20260318d"></script>
+    <script defer src="app.js?v=20260318d"></script>
   </head>
   <body>
     <div class="bg-shape shape-a"></div>
@@ -150,7 +150,39 @@
 
         <section id="view-recruitment" class="view">
           <div class="card">
+            <div class="section-head">
+              <h3 id="recruitment-form-title">מגויס חדש</h3>
+              <button id="recruitment-cancel-edit" class="btn btn-secondary hidden" type="button">ביטול עריכה</button>
+            </div>
+            <form id="recruitment-form" class="form-grid">
+              <input name="id" type="hidden" />
+              <input name="candidate_name" placeholder="שם המגויס" required />
+              <input name="role_title" placeholder="תפקיד" required />
+              <select name="team_lead_id" id="recruitment-team-lead" required></select>
+              <select name="status">
+                <option value="new">חדש</option>
+                <option value="sourcing">איתור</option>
+                <option value="screening">סינון</option>
+                <option value="interview">ראיון</option>
+                <option value="technical">מבדק טכני</option>
+                <option value="final_interview">ראיון סופי</option>
+                <option value="offer">הצעה</option>
+                <option value="hired">התקבל</option>
+                <option value="on_hold">מוקפא</option>
+                <option value="rejected">נדחה</option>
+              </select>
+              <input name="next_status_check_date" type="date" placeholder="בדיקת סטטוס הבאה" />
+              <label class="check-line"><input name="reminder_enabled" type="checkbox" checked /> התראה פעילה</label>
+              <textarea name="notes" placeholder="הערות"></textarea>
+              <button class="btn btn-primary" type="submit">שמירה</button>
+            </form>
+          </div>
+          <div class="card">
             <h3>פייפליין גיוסים לפי סטטוס</h3>
+            <p class="recruitment-help">
+              לכל מגויס ניתן להוסיף שלבי תהליך (לדוגמה: ראיון ראשון, ראיון שני, טפסי סיווג, בדיקות רפואיות),
+              לבחור סטטוס שלב, ולהגדיר תאריך בדיקה והתראה.
+            </p>
             <div id="recruitment-board"></div>
           </div>
         </section>

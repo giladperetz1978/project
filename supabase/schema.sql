@@ -47,10 +47,25 @@ create table public.recruitment_processes (
   status recruitment_status not null default 'new',
   source_channel text,
   opened_at date not null default current_date,
+  next_status_check_date date,
+  reminder_enabled boolean not null default true,
   notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (team_lead_id, candidate_name, role_title)
+);
+
+create table public.recruitment_process_steps (
+  id uuid primary key default gen_random_uuid(),
+  recruitment_process_id uuid not null references public.recruitment_processes(id) on delete cascade,
+  step_name text not null,
+  step_status text not null default 'pending' check (step_status in ('pending', 'in_progress', 'done', 'blocked')),
+  next_check_date date,
+  reminder_enabled boolean not null default true,
+  notes text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (recruitment_process_id, step_name)
 );
 
 create table public.clients (
@@ -245,6 +260,8 @@ create index idx_projects_team_lead_id on public.projects(team_lead_id);
 create index idx_projects_status on public.projects(status);
 create index idx_recruitment_processes_team_lead_id on public.recruitment_processes(team_lead_id);
 create index idx_recruitment_processes_status on public.recruitment_processes(status);
+create index idx_recruitment_process_steps_process_id on public.recruitment_process_steps(recruitment_process_id);
+create index idx_recruitment_process_steps_status on public.recruitment_process_steps(step_status);
 create index idx_tasks_project_id on public.tasks(project_id);
 create index idx_tasks_assignee on public.tasks(assignee_team_lead_id);
 create index idx_tasks_status on public.tasks(status);
@@ -270,6 +287,9 @@ create trigger set_team_leads_updated_at before update on public.team_leads
 for each row execute function public.set_updated_at();
 
 create trigger set_recruitment_processes_updated_at before update on public.recruitment_processes
+for each row execute function public.set_updated_at();
+
+create trigger set_recruitment_process_steps_updated_at before update on public.recruitment_process_steps
 for each row execute function public.set_updated_at();
 
 create trigger set_clients_updated_at before update on public.clients
@@ -367,6 +387,7 @@ select
 alter table public.profiles enable row level security;
 alter table public.team_leads enable row level security;
 alter table public.recruitment_processes enable row level security;
+alter table public.recruitment_process_steps enable row level security;
 alter table public.clients enable row level security;
 alter table public.projects enable row level security;
 alter table public.milestones enable row level security;
@@ -392,6 +413,11 @@ create policy "Public prototype can read recruitment processes" on public.recrui
 create policy "Public prototype can insert recruitment processes" on public.recruitment_processes for insert to anon, authenticated with check (true);
 create policy "Public prototype can update recruitment processes" on public.recruitment_processes for update to anon, authenticated using (true);
 create policy "Public prototype can delete recruitment processes" on public.recruitment_processes for delete to anon, authenticated using (true);
+
+create policy "Public prototype can read recruitment process steps" on public.recruitment_process_steps for select to anon, authenticated using (true);
+create policy "Public prototype can insert recruitment process steps" on public.recruitment_process_steps for insert to anon, authenticated with check (true);
+create policy "Public prototype can update recruitment process steps" on public.recruitment_process_steps for update to anon, authenticated using (true);
+create policy "Public prototype can delete recruitment process steps" on public.recruitment_process_steps for delete to anon, authenticated using (true);
 
 create policy "Public prototype can read clients" on public.clients for select to anon, authenticated using (true);
 create policy "Public prototype can insert clients" on public.clients for insert to anon, authenticated with check (true);

@@ -11,6 +11,11 @@ create policy "Public prototype can insert recruitment processes" on public.recr
 create policy "Public prototype can update recruitment processes" on public.recruitment_processes for update to anon, authenticated using (true);
 create policy "Public prototype can delete recruitment processes" on public.recruitment_processes for delete to anon, authenticated using (true);
 
+create policy "Public prototype can read recruitment process steps" on public.recruitment_process_steps for select to anon, authenticated using (true);
+create policy "Public prototype can insert recruitment process steps" on public.recruitment_process_steps for insert to anon, authenticated with check (true);
+create policy "Public prototype can update recruitment process steps" on public.recruitment_process_steps for update to anon, authenticated using (true);
+create policy "Public prototype can delete recruitment process steps" on public.recruitment_process_steps for delete to anon, authenticated using (true);
+
 create policy "Public prototype can read clients" on public.clients for select to anon, authenticated using (true);
 create policy "Public prototype can insert clients" on public.clients for insert to anon, authenticated with check (true);
 create policy "Public prototype can update clients" on public.clients for update to anon, authenticated using (true);

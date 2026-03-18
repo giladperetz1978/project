@@ -18,16 +18,37 @@ create table if not exists public.recruitment_processes (
   status recruitment_status not null default 'new',
   source_channel text,
   opened_at date not null default current_date,
+  next_status_check_date date,
+  reminder_enabled boolean not null default true,
   notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (team_lead_id, candidate_name, role_title)
 );
 
+alter table public.recruitment_processes add column if not exists next_status_check_date date;
+alter table public.recruitment_processes add column if not exists reminder_enabled boolean not null default true;
+
+create table if not exists public.recruitment_process_steps (
+  id uuid primary key default gen_random_uuid(),
+  recruitment_process_id uuid not null references public.recruitment_processes(id) on delete cascade,
+  step_name text not null,
+  step_status text not null default 'pending' check (step_status in ('pending', 'in_progress', 'done', 'blocked')),
+  next_check_date date,
+  reminder_enabled boolean not null default true,
+  notes text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (recruitment_process_id, step_name)
+);
+
 create index if not exists idx_recruitment_processes_team_lead_id on public.recruitment_processes(team_lead_id);
 create index if not exists idx_recruitment_processes_status on public.recruitment_processes(status);
+create index if not exists idx_recruitment_process_steps_process_id on public.recruitment_process_steps(recruitment_process_id);
+create index if not exists idx_recruitment_process_steps_status on public.recruitment_process_steps(step_status);
 
 alter table public.recruitment_processes enable row level security;
+alter table public.recruitment_process_steps enable row level security;
 
 drop policy if exists "Public prototype can read recruitment processes" on public.recruitment_processes;
 create policy "Public prototype can read recruitment processes" on public.recruitment_processes for select to anon, authenticated using (true);
@@ -41,6 +62,18 @@ create policy "Public prototype can update recruitment processes" on public.recr
 drop policy if exists "Public prototype can delete recruitment processes" on public.recruitment_processes;
 create policy "Public prototype can delete recruitment processes" on public.recruitment_processes for delete to anon, authenticated using (true);
 
+drop policy if exists "Public prototype can read recruitment process steps" on public.recruitment_process_steps;
+create policy "Public prototype can read recruitment process steps" on public.recruitment_process_steps for select to anon, authenticated using (true);
+
+drop policy if exists "Public prototype can insert recruitment process steps" on public.recruitment_process_steps;
+create policy "Public prototype can insert recruitment process steps" on public.recruitment_process_steps for insert to anon, authenticated with check (true);
+
+drop policy if exists "Public prototype can update recruitment process steps" on public.recruitment_process_steps;
+create policy "Public prototype can update recruitment process steps" on public.recruitment_process_steps for update to anon, authenticated using (true);
+
+drop policy if exists "Public prototype can delete recruitment process steps" on public.recruitment_process_steps;
+create policy "Public prototype can delete recruitment process steps" on public.recruitment_process_steps for delete to anon, authenticated using (true);
+
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql
@@ -53,6 +86,10 @@ $$;
 
 drop trigger if exists set_recruitment_processes_updated_at on public.recruitment_processes;
 create trigger set_recruitment_processes_updated_at before update on public.recruitment_processes
+for each row execute function public.set_updated_at();
+
+drop trigger if exists set_recruitment_process_steps_updated_at on public.recruitment_process_steps;
+create trigger set_recruitment_process_steps_updated_at before update on public.recruitment_process_steps
 for each row execute function public.set_updated_at();
 
 with seed(preferred_team_lead, candidate_name, role_title, status, source_channel, opened_at, notes) as (

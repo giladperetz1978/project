@@ -517,6 +517,22 @@ td {
   gap: 8px;
 }
 
+.recruitment-help {
+  margin-top: 0;
+  margin-bottom: 10px;
+  color: #41566f;
+}
+
+.recruitment-warning {
+  margin-top: 0;
+  margin-bottom: 10px;
+  color: #9a5f00;
+  background: rgba(247, 163, 27, 0.14);
+  border: 1px solid rgba(247, 163, 27, 0.35);
+  border-radius: 8px;
+  padding: 8px;
+}
+
 .recruitment-card {
   border: 1px solid #dbe6f1;
   border-radius: 10px;
@@ -524,6 +540,43 @@ td {
   padding: 8px;
   display: grid;
   gap: 4px;
+}
+
+.recruitment-steps-list {
+  margin-top: 8px;
+  display: grid;
+  gap: 6px;
+}
+
+.recruitment-step-item {
+  border: 1px dashed #dbe6f1;
+  border-radius: 8px;
+  padding: 7px;
+  display: grid;
+  gap: 4px;
+  background: #fbfdff;
+}
+
+.recruitment-step-status {
+  font-weight: 700;
+  color: #28415c;
+}
+
+.recruitment-step-empty {
+  color: #6f8093;
+  font-size: 0.9rem;
+}
+
+.recruitment-step-form {
+  margin-top: 8px;
+  border-top: 1px solid #edf3fa;
+  padding-top: 8px;
+  display: grid;
+  gap: 6px;
+}
+
+.recruitment-step-form .check-line {
+  font-size: 0.9rem;
 }
 
 .recruitment-card small {
