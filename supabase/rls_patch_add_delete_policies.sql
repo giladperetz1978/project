@@ -4,6 +4,8 @@
 create policy "Public prototype can delete team leads" on public.team_leads for delete to anon, authenticated using (true);
 create policy "Public prototype can delete recruitment processes" on public.recruitment_processes for delete to anon, authenticated using (true);
 create policy "Public prototype can delete recruitment process steps" on public.recruitment_process_steps for delete to anon, authenticated using (true);
+create policy "Public prototype can delete recruitment stage templates" on public.recruitment_stage_templates for delete to anon, authenticated using (true);
+create policy "Public prototype can delete recruitment positions" on public.recruitment_positions for delete to anon, authenticated using (true);
 create policy "Public prototype can delete clients" on public.clients for delete to anon, authenticated using (true);
 create policy "Public prototype can delete projects" on public.projects for delete to anon, authenticated using (true);
 create policy "Public prototype can delete milestones" on public.milestones for delete to anon, authenticated using (true);

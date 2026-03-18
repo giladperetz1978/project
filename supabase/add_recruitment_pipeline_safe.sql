@@ -42,13 +42,36 @@ create table if not exists public.recruitment_process_steps (
   unique (recruitment_process_id, step_name)
 );
 
+create table if not exists public.recruitment_stage_templates (
+  id uuid primary key default gen_random_uuid(),
+  stage_name text not null unique,
+  sort_order int not null default 0,
+  description text,
+  is_active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.recruitment_positions (
+  id uuid primary key default gen_random_uuid(),
+  position_name text not null unique,
+  position_profile text not null,
+  is_active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create index if not exists idx_recruitment_processes_team_lead_id on public.recruitment_processes(team_lead_id);
 create index if not exists idx_recruitment_processes_status on public.recruitment_processes(status);
 create index if not exists idx_recruitment_process_steps_process_id on public.recruitment_process_steps(recruitment_process_id);
 create index if not exists idx_recruitment_process_steps_status on public.recruitment_process_steps(step_status);
+create index if not exists idx_recruitment_stage_templates_sort_order on public.recruitment_stage_templates(sort_order);
+create index if not exists idx_recruitment_positions_active on public.recruitment_positions(is_active);
 
 alter table public.recruitment_processes enable row level security;
 alter table public.recruitment_process_steps enable row level security;
+alter table public.recruitment_stage_templates enable row level security;
+alter table public.recruitment_positions enable row level security;
 
 drop policy if exists "Public prototype can read recruitment processes" on public.recruitment_processes;
 create policy "Public prototype can read recruitment processes" on public.recruitment_processes for select to anon, authenticated using (true);
@@ -74,6 +97,30 @@ create policy "Public prototype can update recruitment process steps" on public.
 drop policy if exists "Public prototype can delete recruitment process steps" on public.recruitment_process_steps;
 create policy "Public prototype can delete recruitment process steps" on public.recruitment_process_steps for delete to anon, authenticated using (true);
 
+drop policy if exists "Public prototype can read recruitment stage templates" on public.recruitment_stage_templates;
+create policy "Public prototype can read recruitment stage templates" on public.recruitment_stage_templates for select to anon, authenticated using (true);
+
+drop policy if exists "Public prototype can insert recruitment stage templates" on public.recruitment_stage_templates;
+create policy "Public prototype can insert recruitment stage templates" on public.recruitment_stage_templates for insert to anon, authenticated with check (true);
+
+drop policy if exists "Public prototype can update recruitment stage templates" on public.recruitment_stage_templates;
+create policy "Public prototype can update recruitment stage templates" on public.recruitment_stage_templates for update to anon, authenticated using (true);
+
+drop policy if exists "Public prototype can delete recruitment stage templates" on public.recruitment_stage_templates;
+create policy "Public prototype can delete recruitment stage templates" on public.recruitment_stage_templates for delete to anon, authenticated using (true);
+
+drop policy if exists "Public prototype can read recruitment positions" on public.recruitment_positions;
+create policy "Public prototype can read recruitment positions" on public.recruitment_positions for select to anon, authenticated using (true);
+
+drop policy if exists "Public prototype can insert recruitment positions" on public.recruitment_positions;
+create policy "Public prototype can insert recruitment positions" on public.recruitment_positions for insert to anon, authenticated with check (true);
+
+drop policy if exists "Public prototype can update recruitment positions" on public.recruitment_positions;
+create policy "Public prototype can update recruitment positions" on public.recruitment_positions for update to anon, authenticated using (true);
+
+drop policy if exists "Public prototype can delete recruitment positions" on public.recruitment_positions;
+create policy "Public prototype can delete recruitment positions" on public.recruitment_positions for delete to anon, authenticated using (true);
+
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql
@@ -90,6 +137,14 @@ for each row execute function public.set_updated_at();
 
 drop trigger if exists set_recruitment_process_steps_updated_at on public.recruitment_process_steps;
 create trigger set_recruitment_process_steps_updated_at before update on public.recruitment_process_steps
+for each row execute function public.set_updated_at();
+
+drop trigger if exists set_recruitment_stage_templates_updated_at on public.recruitment_stage_templates;
+create trigger set_recruitment_stage_templates_updated_at before update on public.recruitment_stage_templates
+for each row execute function public.set_updated_at();
+
+drop trigger if exists set_recruitment_positions_updated_at on public.recruitment_positions;
+create trigger set_recruitment_positions_updated_at before update on public.recruitment_positions
 for each row execute function public.set_updated_at();
 
 with seed(preferred_team_lead, candidate_name, role_title, status, source_channel, opened_at, notes) as (

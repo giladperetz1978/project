@@ -15,6 +15,8 @@ const state = {
       teamLeads: [],
       recruitmentProcesses: [],
       recruitmentProcessSteps: [],
+      recruitmentStages: [],
+      positions: [],
       knowledgeItems: [],
       meetings: [],
     },
@@ -75,6 +77,13 @@ function isMissingRecruitmentWorkflowSchemaError(error) {
     message.includes('next_status_check_date') ||
     message.includes('reminder_enabled')
   );
+}
+
+function isMissingRecruitmentMasterTableError(error) {
+  if (!error) return false;
+  const message = String(error.message || '').toLowerCase();
+  const code = String(error.code || '').toLowerCase();
+  return code === 'pgrst205' || message.includes('recruitment_stage_templates') || message.includes('recruitment_positions');
 }
 
 function updateSupabaseStatus(stateName, note) {
@@ -189,6 +198,8 @@ function setFormMode(formName, isEditing) {
     client: ['#client-form-title', '#client-cancel-edit', 'לקוח חדש', 'עריכת לקוח'],
     'team-lead': ['#team-lead-form-title', '#team-lead-cancel-edit', 'ראש צוות חדש', 'עריכת ראש צוות'],
     recruitment: ['#recruitment-form-title', '#recruitment-cancel-edit', 'מגויס חדש', 'עריכת מגויס'],
+    'recruitment-stage': ['#recruitment-stage-form-title', '#recruitment-stage-cancel-edit', 'שלב גיוס חדש', 'עריכת שלב גיוס'],
+    position: ['#position-form-title', '#position-cancel-edit', 'תקן חדש', 'עריכת תקן'],
     kb: ['#kb-form-title', '#kb-cancel-edit', 'פריט ידע חדש', 'עריכת פריט ידע'],
     meeting: ['#meeting-form-title', '#meeting-cancel-edit', 'פגישה חדשה', 'עריכת פגישה'],
   };
@@ -238,6 +249,24 @@ function resetKnowledgeForm() {
   setFormMode('kb', false);
 }
 
+function resetRecruitmentStageForm() {
+  const form = $('#recruitment-stage-form');
+  if (!form) return;
+  form.reset();
+  form.elements.id.value = '';
+  form.elements.is_active.checked = true;
+  setFormMode('recruitment-stage', false);
+}
+
+function resetPositionForm() {
+  const form = $('#position-form');
+  if (!form) return;
+  form.reset();
+  form.elements.id.value = '';
+  form.elements.is_active.checked = true;
+  setFormMode('position', false);
+}
+
 function resetMeetingForm() {
   const form = $('#meeting-form');
   form.reset();
@@ -262,6 +291,8 @@ async function loadAll() {
     loadClients(),
     loadTeamWorkload(),
     loadRecruitmentBoard(),
+    loadRecruitmentStages(),
+    loadPositions(),
     loadAnalytics(),
     loadKnowledge(),
     loadMeetings(),
@@ -620,6 +651,76 @@ async function loadRecruitmentBoard() {
     .join('')}</div>`;
 }
 
+async function loadRecruitmentStages() {
+  const host = $('#recruitment-stage-list');
+  if (!host) return;
+
+  const { data, error } = await state.sb
+    .from('recruitment_stage_templates')
+    .select('id,stage_name,description,sort_order,is_active,updated_at')
+    .order('sort_order', { ascending: true })
+    .order('stage_name', { ascending: true });
+
+  if (error) {
+    if (isMissingRecruitmentMasterTableError(error)) {
+      host.innerHTML = '<h3>רשימת שלבי גיוס</h3><p>יש להריץ את add_recruitment_pipeline_safe.sql כדי ליצור את הטבלה.</p>';
+      return;
+    }
+    showSupabaseError('שגיאה בטעינת שלבי גיוס', error);
+    return;
+  }
+
+  state.cache.records.recruitmentStages = data || [];
+
+  host.innerHTML = `<h3>רשימת שלבי גיוס</h3><div class="list">${state.cache.records.recruitmentStages
+    .map(
+      (item) => `<div class="list-item">
+        <div class="list-item-head">
+          <strong>${item.stage_name}</strong>
+          ${renderActionButtons('recruitment-stage', item.id)}
+        </div>
+        <div>סדר: ${item.sort_order ?? 0}</div>
+        <div>פעיל: ${item.is_active ? 'כן' : 'לא'}</div>
+        <div>${item.description || ''}</div>
+      </div>`
+    )
+    .join('')}</div>`;
+}
+
+async function loadPositions() {
+  const host = $('#positions-list');
+  if (!host) return;
+
+  const { data, error } = await state.sb
+    .from('recruitment_positions')
+    .select('id,position_name,position_profile,is_active,updated_at')
+    .order('updated_at', { ascending: false });
+
+  if (error) {
+    if (isMissingRecruitmentMasterTableError(error)) {
+      host.innerHTML = '<h3>רשימת תקנים</h3><p>יש להריץ את add_recruitment_pipeline_safe.sql כדי ליצור את הטבלה.</p>';
+      return;
+    }
+    showSupabaseError('שגיאה בטעינת תקנים', error);
+    return;
+  }
+
+  state.cache.records.positions = data || [];
+
+  host.innerHTML = `<h3>רשימת תקנים</h3><div class="list">${state.cache.records.positions
+    .map(
+      (item) => `<div class="list-item">
+        <div class="list-item-head">
+          <strong>${item.position_name}</strong>
+          ${renderActionButtons('position', item.id)}
+        </div>
+        <div>פעיל: ${item.is_active ? 'כן' : 'לא'}</div>
+        <div>${item.position_profile || ''}</div>
+      </div>`
+    )
+    .join('')}</div>`;
+}
+
 async function loadKnowledge() {
   const { data, error } = await state.sb
     .from('knowledge_items')
@@ -852,6 +953,33 @@ function editRecruitment(id) {
   }
 
   setFormMode('recruitment', true);
+}
+
+function editRecruitmentStage(id) {
+  const item = getRecord('recruitmentStages', id);
+  if (!item) return;
+  const form = $('#recruitment-stage-form');
+  if (!form) return;
+
+  form.elements.id.value = item.id;
+  form.elements.stage_name.value = item.stage_name || '';
+  form.elements.sort_order.value = item.sort_order ?? 0;
+  form.elements.description.value = item.description || '';
+  form.elements.is_active.checked = Boolean(item.is_active);
+  setFormMode('recruitment-stage', true);
+}
+
+function editPosition(id) {
+  const item = getRecord('positions', id);
+  if (!item) return;
+  const form = $('#position-form');
+  if (!form) return;
+
+  form.elements.id.value = item.id;
+  form.elements.position_name.value = item.position_name || '';
+  form.elements.position_profile.value = item.position_profile || '';
+  form.elements.is_active.checked = Boolean(item.is_active);
+  setFormMode('position', true);
 }
 
 async function deleteById(tableName, id, contextText) {
@@ -1173,10 +1301,59 @@ function wireForms() {
     }
   });
 
+  $('#recruitment-stage-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!state.sb) return showMessage('יש להתחבר קודם ל-Supabase');
+
+    const form = event.target;
+    const payload = {
+      stage_name: form.elements.stage_name.value,
+      sort_order: Number(form.elements.sort_order.value || 0),
+      description: form.elements.description.value || null,
+      is_active: form.elements.is_active.checked,
+    };
+
+    const recordId = form.elements.id.value;
+    const query = recordId
+      ? state.sb.from('recruitment_stage_templates').update(payload).eq('id', recordId)
+      : state.sb.from('recruitment_stage_templates').insert(payload);
+
+    const { error } = await query;
+    if (error) return showSupabaseError('שמירת שלב גיוס נכשלה', error);
+
+    resetRecruitmentStageForm();
+    await loadRecruitmentStages();
+  });
+
+  $('#position-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!state.sb) return showMessage('יש להתחבר קודם ל-Supabase');
+
+    const form = event.target;
+    const payload = {
+      position_name: form.elements.position_name.value,
+      position_profile: form.elements.position_profile.value,
+      is_active: form.elements.is_active.checked,
+    };
+
+    const recordId = form.elements.id.value;
+    const query = recordId
+      ? state.sb.from('recruitment_positions').update(payload).eq('id', recordId)
+      : state.sb.from('recruitment_positions').insert(payload);
+
+    const { error } = await query;
+    if (error) return showSupabaseError('שמירת תקן נכשלה', error);
+
+    resetPositionForm();
+    await loadPositions();
+  });
+
   $('#project-cancel-edit').addEventListener('click', resetProjectForm);
   $('#client-cancel-edit').addEventListener('click', resetClientForm);
   $('#team-lead-cancel-edit').addEventListener('click', resetTeamLeadForm);
   $('#recruitment-cancel-edit').addEventListener('click', resetRecruitmentForm);
+  $('#recruitment-stage-cancel-edit').addEventListener('click', resetRecruitmentStageForm);
+  $('#position-cancel-edit').addEventListener('click', resetPositionForm);
   $('#kb-cancel-edit').addEventListener('click', resetKnowledgeForm);
   $('#meeting-cancel-edit').addEventListener('click', resetMeetingForm);
 }
@@ -1188,6 +1365,8 @@ function registerGlobalActions() {
       if (entity === 'client') editClient(id);
       if (entity === 'team-lead') editTeamLead(id);
       if (entity === 'recruitment') editRecruitment(id);
+      if (entity === 'recruitment-stage') editRecruitmentStage(id);
+      if (entity === 'position') editPosition(id);
       if (entity === 'kb') editKnowledge(id);
       if (entity === 'meeting') editMeeting(id);
     },
@@ -1196,6 +1375,8 @@ function registerGlobalActions() {
       if (entity === 'client') await deleteById('clients', id, 'הלקוח');
       if (entity === 'team-lead') await deleteById('team_leads', id, 'ראש הצוות');
       if (entity === 'recruitment') await deleteById('recruitment_processes', id, 'תהליך הגיוס');
+      if (entity === 'recruitment-stage') await deleteById('recruitment_stage_templates', id, 'שלב הגיוס');
+      if (entity === 'position') await deleteById('recruitment_positions', id, 'התקן');
       if (entity === 'kb') await deleteById('knowledge_items', id, 'פריט הידע');
       if (entity === 'meeting') await deleteById('meetings', id, 'הפגישה');
     },

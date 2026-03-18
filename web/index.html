@@ -7,11 +7,11 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css?v=20260318d" />
+    <link rel="stylesheet" href="styles.css?v=20260318e" />
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-    <script src="config.local.js?v=20260318d"></script>
-    <script defer src="app.js?v=20260318d"></script>
+    <script src="config.local.js?v=20260318e"></script>
+    <script defer src="app.js?v=20260318e"></script>
   </head>
   <body>
     <div class="bg-shape shape-a"></div>
@@ -46,6 +46,8 @@
         <button class="nav-btn" data-view="clients">לקוחות</button>
         <button class="nav-btn" data-view="team-leads">ראשי צוותים</button>
         <button class="nav-btn" data-view="recruitment">גיוסים</button>
+        <button class="nav-btn" data-view="recruitment-stages">שלבי גיוס</button>
+        <button class="nav-btn" data-view="positions">תקנים</button>
         <button class="nav-btn" data-view="analytics">אנליטיקות</button>
         <button class="nav-btn" data-view="knowledge">מאגר ידע</button>
         <button class="nav-btn" data-view="meetings">פגישות</button>
@@ -185,6 +187,41 @@
             </p>
             <div id="recruitment-board"></div>
           </div>
+        </section>
+
+        <section id="view-recruitment-stages" class="view">
+          <div class="card">
+            <div class="section-head">
+              <h3 id="recruitment-stage-form-title">שלב גיוס חדש</h3>
+              <button id="recruitment-stage-cancel-edit" class="btn btn-secondary hidden" type="button">ביטול עריכה</button>
+            </div>
+            <form id="recruitment-stage-form" class="form-grid">
+              <input name="id" type="hidden" />
+              <input name="stage_name" placeholder="שם שלב" required />
+              <input name="sort_order" type="number" placeholder="סדר תצוגה" />
+              <label class="check-line"><input name="is_active" type="checkbox" checked /> פעיל</label>
+              <textarea name="description" placeholder="תיאור (אופציונלי)"></textarea>
+              <button class="btn btn-primary" type="submit">שמירה</button>
+            </form>
+          </div>
+          <div class="card" id="recruitment-stage-list"></div>
+        </section>
+
+        <section id="view-positions" class="view">
+          <div class="card">
+            <div class="section-head">
+              <h3 id="position-form-title">תקן חדש</h3>
+              <button id="position-cancel-edit" class="btn btn-secondary hidden" type="button">ביטול עריכה</button>
+            </div>
+            <form id="position-form" class="form-grid">
+              <input name="id" type="hidden" />
+              <input name="position_name" placeholder="שם התקן" required />
+              <label class="check-line"><input name="is_active" type="checkbox" checked /> תקן פעיל</label>
+              <textarea name="position_profile" placeholder="פרופיל התקן" required></textarea>
+              <button class="btn btn-primary" type="submit">שמירה</button>
+            </form>
+          </div>
+          <div class="card" id="positions-list"></div>
         </section>
 
         <section id="view-analytics" class="view">
