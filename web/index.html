@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Amarel PM Cockpit</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css?v=20260318b" />
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+    <script src="config.local.js?v=20260318b"></script>
+    <script defer src="app.js?v=20260318b"></script>
+  </head>
+  <body>
+    <div class="bg-shape shape-a"></div>
+    <div class="bg-shape shape-b"></div>
+
+    <header class="top-bar">
+      <div class="brand-wrap">
+        <img src="assets/amarel-logo.png" alt="Amarel" class="brand-logo" />
+        <div>
+          <h1>Project Cockpit</h1>
+          <p>ניהול פרויקטים אישי עם Supabase</p>
+        </div>
+      </div>
+      <div class="connection-panel">
+        <div class="status-bar">
+          <div class="status-chip status-chip-online" id="server-status">שרת אונליין</div>
+          <div class="status-chip status-chip-pending" id="supabase-status">Supabase: בודק חיבור...</div>
+        </div>
+        <div class="status-note" id="connection-note">האפליקציה מנסה להתחבר אוטומטית בזמן טעינה.</div>
+        <div class="supabase-config">
+          <input id="sb-url" type="url" placeholder="Supabase URL" />
+          <input id="sb-key" type="password" placeholder="Anon Key" />
+          <button id="connect-btn" class="btn btn-primary">חיבור מחדש</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="app-shell">
+      <aside class="sidebar">
+        <button class="nav-btn active" data-view="dashboard">דשבורד</button>
+        <button class="nav-btn" data-view="projects">פרויקטים</button>
+        <button class="nav-btn" data-view="clients">לקוחות</button>
+        <button class="nav-btn" data-view="team-leads">ראשי צוותים</button>
+        <button class="nav-btn" data-view="analytics">אנליטיקות</button>
+        <button class="nav-btn" data-view="knowledge">מאגר ידע</button>
+        <button class="nav-btn" data-view="meetings">פגישות</button>
+      </aside>
+
+      <section class="content">
+        <section id="view-dashboard" class="view active">
+          <div class="kpi-grid" id="kpi-grid"></div>
+          <div class="split-grid">
+            <article class="card">
+              <h3>פרויקטים בסיכון / איחור</h3>
+              <div id="risk-projects"></div>
+            </article>
+            <article class="card">
+              <h3>התראות חכמות</h3>
+              <div id="alerts-list"></div>
+            </article>
+          </div>
+        </section>
+
+        <section id="view-projects" class="view">
+          <div class="card">
+            <div class="section-head">
+              <h3 id="project-form-title">פרויקט חדש</h3>
+              <button id="project-cancel-edit" class="btn btn-secondary hidden" type="button">ביטול עריכה</button>
+            </div>
+            <form id="project-form" class="form-grid">
+              <input name="id" type="hidden" />
+              <input name="name" placeholder="שם פרויקט" required />
+              <select name="client_id" id="project-client"></select>
+              <select name="team_lead_id" id="project-team-lead"></select>
+              <input name="start_date" type="date" />
+              <input name="target_date" type="date" />
+              <input name="budget_planned" type="number" step="0.01" placeholder="תקציב" />
+              <select name="status">
+                <option value="planning">Planning</option>
+                <option value="active">Active</option>
+                <option value="on_hold">On Hold</option>
+                <option value="completed">Completed</option>
+              </select>
+              <button class="btn btn-primary" type="submit">שמירה</button>
+            </form>
+          </div>
+          <div class="card">
+            <h3>רשימת פרויקטים</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>שם</th>
+                  <th>לקוח</th>
+                  <th>ראש צוות</th>
+                  <th>סטטוס</th>
+                  <th>בריאות</th>
+                  <th>התקדמות</th>
+                  <th>יעד</th>
+                  <th>פעולות</th>
+                </tr>
+              </thead>
+              <tbody id="projects-table"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="view-clients" class="view">
+          <div class="card">
+            <div class="section-head">
+              <h3 id="client-form-title">לקוח חדש</h3>
+              <button id="client-cancel-edit" class="btn btn-secondary hidden" type="button">ביטול עריכה</button>
+            </div>
+            <form id="client-form" class="form-grid">
+              <input name="id" type="hidden" />
+              <input name="company_name" placeholder="שם חברה" required />
+              <input name="primary_contact_name" placeholder="איש קשר" />
+              <input name="primary_contact_email" type="email" placeholder="מייל" />
+              <input name="primary_contact_phone" placeholder="טלפון" />
+              <input name="satisfaction_score" type="number" min="1" max="10" placeholder="שביעות רצון 1-10" />
+              <label class="check-line"><input name="is_sensitive" type="checkbox" /> לקוח רגיש</label>
+              <button class="btn btn-primary" type="submit">שמירה</button>
+            </form>
+          </div>
+          <div class="card" id="clients-list"></div>
+        </section>
+
+        <section id="view-team-leads" class="view">
+          <div class="card">
+            <div class="section-head">
+              <h3 id="team-lead-form-title">ראש צוות חדש</h3>
+              <button id="team-lead-cancel-edit" class="btn btn-secondary hidden" type="button">ביטול עריכה</button>
+            </div>
+            <form id="team-lead-form" class="form-grid">
+              <input name="id" type="hidden" />
+              <input name="full_name" placeholder="שם" required />
+              <input name="team_name" placeholder="צוות" />
+              <input name="domain" placeholder="תחום" />
+              <input name="email" type="email" placeholder="מייל" />
+              <label class="check-line"><input name="is_available" type="checkbox" checked /> זמין</label>
+              <button class="btn btn-primary" type="submit">שמירה</button>
+            </form>
+          </div>
+          <div class="card" id="team-workload"></div>
+        </section>
+
+        <section id="view-analytics" class="view">
+          <div class="chart-grid">
+            <article class="card"><h3>התקדמות פרויקטים</h3><canvas id="progress-chart"></canvas></article>
+            <article class="card"><h3>עומס ראשי צוותים</h3><canvas id="workload-chart"></canvas></article>
+            <article class="card"><h3>תקציב מתוכנן מול בפועל</h3><canvas id="budget-chart"></canvas></article>
+          </div>
+        </section>
+
+        <section id="view-knowledge" class="view">
+          <div class="card">
+            <div class="section-head">
+              <h3 id="kb-form-title">פריט ידע חדש</h3>
+              <button id="kb-cancel-edit" class="btn btn-secondary hidden" type="button">ביטול עריכה</button>
+            </div>
+            <form id="kb-form" class="form-grid">
+              <input name="id" type="hidden" />
+              <select name="item_type">
+                <option value="template">Template</option>
+                <option value="procedure">Procedure</option>
+                <option value="tip">Tip</option>
+                <option value="insight">Insight</option>
+              </select>
+              <input name="title" placeholder="כותרת" required />
+              <textarea name="content" placeholder="תוכן" required></textarea>
+              <button class="btn btn-primary" type="submit">שמירה</button>
+            </form>
+          </div>
+          <div class="card" id="kb-list"></div>
+        </section>
+
+        <section id="view-meetings" class="view">
+          <div class="card">
+            <div class="section-head">
+              <h3 id="meeting-form-title">פגישה חדשה</h3>
+              <button id="meeting-cancel-edit" class="btn btn-secondary hidden" type="button">ביטול עריכה</button>
+            </div>
+            <form id="meeting-form" class="form-grid">
+              <input name="id" type="hidden" />
+              <input name="title" placeholder="כותרת" required />
+              <input name="meeting_date" type="datetime-local" required />
+              <select name="client_id" id="meeting-client"></select>
+              <select name="project_id" id="meeting-project"></select>
+              <textarea name="summary" placeholder="סיכום"></textarea>
+              <button class="btn btn-primary" type="submit">שמירה</button>
+            </form>
+          </div>
+          <div class="card" id="meetings-list"></div>
+        </section>
+      </section>
+    </main>
+  </body>
+</html>

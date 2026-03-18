@@ -1,0 +1,6 @@
+Place your logo here as:
+
+amarel-logo.png
+
+Expected path:
+web/assets/amarel-logo.png

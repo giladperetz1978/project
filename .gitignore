@@ -1,0 +1,6 @@
+# Local-only app config (contains Supabase keys)
+web/config.local.js
+
+# Common local env files
+.env
+.env.local
