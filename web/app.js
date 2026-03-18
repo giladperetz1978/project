@@ -218,6 +218,7 @@ async function loadAll() {
     loadProjectsTable(),
     loadClients(),
     loadTeamWorkload(),
+    loadRecruitmentBoard(),
     loadAnalytics(),
     loadKnowledge(),
     loadMeetings(),
@@ -420,6 +421,57 @@ async function loadTeamWorkload() {
         <div class="recruitment-head">תהליכי גיוס: ${recruitmentItems.length}</div>
         ${recruitmentListHtml}
       </div>`;
+    })
+    .join('')}</div>`;
+}
+
+async function loadRecruitmentBoard() {
+  const host = $('#recruitment-board');
+  if (!host) return;
+
+  const { data, error } = await state.sb
+    .from('recruitment_processes')
+    .select('id,team_lead_id,candidate_name,role_title,status,source_channel,updated_at,team_leads(full_name,team_name)')
+    .order('updated_at', { ascending: false });
+
+  if (error) {
+    showSupabaseError('שגיאה בטעינת פייפליין הגיוסים', error);
+    return;
+  }
+
+  const records = data || [];
+  state.cache.records.recruitmentProcesses = records;
+
+  if (!records.length) {
+    host.innerHTML = '<p>אין כרגע תהליכי גיוס.</p>';
+    return;
+  }
+
+  host.innerHTML = `<div class="recruitment-board-grid">${recruitmentStatusOrder
+    .map((status) => {
+      const items = records.filter((item) => item.status === status);
+      return `<article class="recruitment-column">
+        <header>
+          <h4>${recruitmentStatusLabel[status] || status}</h4>
+          <span>${items.length}</span>
+        </header>
+        <div class="recruitment-column-list">
+          ${
+            items.length
+              ? items
+                  .map(
+                    (item) => `<div class="recruitment-card">
+              <strong>${item.candidate_name}</strong>
+              <div>${item.role_title}</div>
+              <small>${item.team_leads?.full_name || 'ללא ראש צוות'}${item.team_leads?.team_name ? ` | ${item.team_leads.team_name}` : ''}</small>
+              <small>מקור: ${item.source_channel || '-'}</small>
+            </div>`
+                  )
+                  .join('')
+              : '<div class="recruitment-card recruitment-card-empty">אין מועמדים בסטטוס זה</div>'
+          }
+        </div>
+      </article>`;
     })
     .join('')}</div>`;
 }

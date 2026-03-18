@@ -469,6 +469,72 @@ td {
   grid-column: span 2;
 }
 
+.recruitment-board-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(180px, 1fr));
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.recruitment-column {
+  border: 1px solid #e3ecf6;
+  border-radius: 12px;
+  padding: 8px;
+  background: linear-gradient(180deg, #fbfdff 0%, #f5f9fd 100%);
+  min-height: 220px;
+}
+
+.recruitment-column header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.recruitment-column h4 {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--accent);
+}
+
+.recruitment-column header span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 24px;
+  border-radius: 999px;
+  background: #eaf1f8;
+  color: #21354d;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.recruitment-column-list {
+  display: grid;
+  gap: 8px;
+}
+
+.recruitment-card {
+  border: 1px solid #dbe6f1;
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 8px;
+  display: grid;
+  gap: 4px;
+}
+
+.recruitment-card small {
+  color: #687d93;
+}
+
+.recruitment-card-empty {
+  color: #71859a;
+  font-style: italic;
+}
+
 @keyframes fade-up {
   from {
     opacity: 0;
@@ -507,6 +573,10 @@ td {
   .split-grid,
   .chart-grid {
     grid-template-columns: 1fr;
+  }
+
+  .recruitment-board-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .chart-grid .card:last-child {
