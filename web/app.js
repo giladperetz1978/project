@@ -131,13 +131,13 @@ function updateSupabaseStatus(stateName, note) {
 
   if (stateName === 'online') {
     statusEl.classList.add('status-chip-online');
-    statusEl.textContent = 'Supabase: מחובר';
+    statusEl.textContent = 'מחובר';
   } else if (stateName === 'offline') {
     statusEl.classList.add('status-chip-offline');
-    statusEl.textContent = 'Supabase: לא מחובר';
+    statusEl.textContent = 'לא מחובר';
   } else {
     statusEl.classList.add('status-chip-pending');
-    statusEl.textContent = 'Supabase: בודק חיבור...';
+    statusEl.textContent = 'בודק חיבור...';
   }
 
   noteEl.textContent = note;

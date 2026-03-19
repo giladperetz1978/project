@@ -135,9 +135,7 @@ body {
 }
 
 .status-note {
-  color: var(--muted);
-  font-size: 0.95rem;
-  text-align: left;
+  display: none;
 }
 
 input,
