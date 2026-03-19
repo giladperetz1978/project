@@ -699,9 +699,6 @@ async function loadRecruitmentBoard() {
   }
 
   const warnings = [];
-  if (!hasWorkflowSchema) {
-    warnings.push('<p class="recruitment-warning">לא זוהו עמודות/טבלת שלבי תהליך. יש להריץ: supabase/add_recruitment_pipeline_safe.sql</p>');
-  }
   if (!hasMasterTables) {
     warnings.push('<p class="recruitment-warning">לא זוהו טבלאות שלבי גיוס/תקנים. יש להריץ: supabase/add_recruitment_pipeline_safe.sql</p>');
   }
@@ -730,13 +727,9 @@ async function loadRecruitmentBoard() {
             items.length
               ? items
                   .map((item) => {
-                    const steps = (item.recruitment_process_steps || []).sort(
-                      (left, right) => new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime()
-                    );
                     const linkedPositions = (item.recruitment_process_positions || [])
                       .map((link) => link.recruitment_positions?.position_name)
                       .filter(Boolean);
-                    const activeStep = steps.find((step) => step.step_status === 'in_progress');
 
                     return `<div class="recruitment-card">
               <div class="list-item-head">
@@ -747,56 +740,8 @@ async function loadRecruitmentBoard() {
               <small>${item.team_leads?.full_name || 'ללא ראש צוות'}${item.team_leads?.team_name ? ` | ${item.team_leads.team_name}` : ''}</small>
               <small>שלב גיוס: ${item.recruitment_stage_templates?.stage_name || (activeStages.length ? 'ללא שלב' : recruitmentStatusLabel[item.status] || item.status)}</small>
               <small>תקנים: ${linkedPositions.length ? linkedPositions.join(', ') : 'ללא תקן משויך'}</small>
-              <small>שלב נוכחי: ${activeStep?.step_name || 'לא הוגדר'}</small>
               <small>בדיקת סטטוס הבאה: ${item.next_status_check_date || '-'}</small>
               <small>התראה: ${item.reminder_enabled === false ? 'כבויה' : 'פעילה'}</small>
-              ${
-                hasWorkflowSchema
-                  ? `<div class="recruitment-steps-list">
-                      ${
-                        steps.length
-                          ? steps
-                              .map(
-                                (step) => `<div class="recruitment-step-item">
-                                <form class="recruitment-step-edit-form" data-process-id="${item.id}" data-step-id="${step.id}">
-                                  <input name="step_name" value="${step.step_name || ''}" placeholder="שם שלב" required />
-                                  <select name="step_status">
-                                    <option value="pending" ${step.step_status === 'pending' ? 'selected' : ''}>ממתין</option>
-                                    <option value="in_progress" ${step.step_status === 'in_progress' ? 'selected' : ''}>בביצוע</option>
-                                    <option value="done" ${step.step_status === 'done' ? 'selected' : ''}>הושלם</option>
-                                    <option value="blocked" ${step.step_status === 'blocked' ? 'selected' : ''}>חסום</option>
-                                  </select>
-                                  <input name="next_check_date" type="date" value="${step.next_check_date || ''}" />
-                                  <label class="check-line"><input name="reminder_enabled" type="checkbox" ${step.reminder_enabled === false ? '' : 'checked'} /> התראה</label>
-                                  <input name="notes" value="${step.notes || ''}" placeholder="הערות שלב" />
-                                  <button class="btn btn-secondary" type="submit">שמירת שלב</button>
-                                </form>
-                                <span class="recruitment-step-status">${recruitmentStepStatusLabel[step.step_status] || step.step_status}</span>
-                                <div class="actions">
-                                  <button class="btn-inline" type="button" data-action="set-current-step" data-process-id="${item.id}" data-step-id="${step.id}">סמן כנוכחי</button>
-                                  <button class="btn-inline btn-inline-danger" type="button" data-action="delete-step" data-step-id="${step.id}">מחיקת שלב</button>
-                                </div>
-                              </div>`
-                              )
-                              .join('')
-                          : '<div class="recruitment-step-empty">אין שלבי תהליך למגויס זה.</div>'
-                      }
-                    </div>
-                    <form class="recruitment-step-form" data-process-id="${item.id}">
-                      <input name="step_name" placeholder="שלב תהליך (למשל ראיון ראשון)" required />
-                      <select name="step_status">
-                        <option value="pending">ממתין</option>
-                        <option value="in_progress">בביצוע</option>
-                        <option value="done">הושלם</option>
-                        <option value="blocked">חסום</option>
-                      </select>
-                      <input name="next_check_date" type="date" />
-                      <label class="check-line"><input name="reminder_enabled" type="checkbox" checked /> התראה</label>
-                      <input name="notes" placeholder="הערות שלב" />
-                      <button class="btn btn-secondary" type="submit">הוספת שלב</button>
-                    </form>`
-                  : ''
-              }
             </div>`;
                   })
                   .join('')
@@ -1382,140 +1327,6 @@ function wireForms() {
     resetRecruitmentForm();
     await loadRecruitmentBoard();
     await loadTeamWorkload();
-  });
-
-  $('#recruitment-board').addEventListener('submit', async (event) => {
-    const form = event.target;
-    if (!form.matches('.recruitment-step-form') && !form.matches('.recruitment-step-edit-form')) return;
-
-    event.preventDefault();
-    if (!state.sb) return showMessage('יש להתחבר קודם ל-Supabase');
-
-    if (!state.features.recruitmentWorkflow) {
-      showMessage('יש להריץ את add_recruitment_pipeline_safe.sql כדי לעבוד עם שלבי תהליך.');
-      return;
-    }
-
-    if (form.matches('.recruitment-step-form')) {
-      const processId = form.dataset.processId;
-      const payload = {
-        recruitment_process_id: processId,
-        step_name: form.elements.step_name.value,
-        step_status: form.elements.step_status.value,
-        next_check_date: form.elements.next_check_date.value || null,
-        reminder_enabled: form.elements.reminder_enabled.checked,
-        notes: form.elements.notes.value || null,
-      };
-
-      const { error } = await state.sb.from('recruitment_process_steps').insert(payload);
-      if (error) return showSupabaseError('הוספת שלב תהליך נכשלה', error);
-
-      if (payload.step_status === 'in_progress') {
-        const matchedStage = (state.cache.records.recruitmentStages || []).find((item) => item.stage_name === payload.step_name && item.is_active);
-        await state.sb
-          .from('recruitment_process_steps')
-          .update({ step_status: 'pending' })
-          .eq('recruitment_process_id', processId)
-          .neq('step_name', payload.step_name)
-          .eq('step_status', 'in_progress');
-
-        await state.sb
-          .from('recruitment_processes')
-          .update({
-            next_status_check_date: payload.next_check_date,
-            reminder_enabled: payload.reminder_enabled,
-            current_stage_template_id: matchedStage?.id || null,
-          })
-          .eq('id', processId);
-      }
-
-      await loadRecruitmentBoard();
-      return;
-    }
-
-    const processId = form.dataset.processId;
-    const stepId = form.dataset.stepId;
-    const updatePayload = {
-      step_name: form.elements.step_name.value,
-      step_status: form.elements.step_status.value,
-      next_check_date: form.elements.next_check_date.value || null,
-      reminder_enabled: form.elements.reminder_enabled.checked,
-      notes: form.elements.notes.value || null,
-    };
-
-    if (updatePayload.step_status === 'in_progress') {
-      const { error: resetError } = await state.sb
-        .from('recruitment_process_steps')
-        .update({ step_status: 'pending' })
-        .eq('recruitment_process_id', processId)
-        .neq('id', stepId)
-        .eq('step_status', 'in_progress');
-      if (resetError) return showSupabaseError('עדכון שלבים נוכחיים נכשל', resetError);
-    }
-
-    const { error: stepUpdateError } = await state.sb.from('recruitment_process_steps').update(updatePayload).eq('id', stepId);
-    if (stepUpdateError) return showSupabaseError('שמירת שלב תהליך נכשלה', stepUpdateError);
-
-    if (updatePayload.step_status === 'in_progress') {
-      const matchedStage = (state.cache.records.recruitmentStages || []).find((item) => item.stage_name === updatePayload.step_name && item.is_active);
-      const { error: processUpdateError } = await state.sb
-        .from('recruitment_processes')
-        .update({
-          next_status_check_date: updatePayload.next_check_date,
-          reminder_enabled: updatePayload.reminder_enabled,
-          current_stage_template_id: matchedStage?.id || null,
-        })
-        .eq('id', processId);
-      if (processUpdateError) return showSupabaseError('עדכון תאריך בדיקה נכשל', processUpdateError);
-    }
-
-    await loadRecruitmentBoard();
-  });
-
-  $('#recruitment-board').addEventListener('click', async (event) => {
-    const button = event.target.closest('button[data-action]');
-    if (!button) return;
-    if (!state.sb) return showMessage('יש להתחבר קודם ל-Supabase');
-
-    const action = button.dataset.action;
-    const stepId = button.dataset.stepId;
-
-    if (action === 'delete-step') {
-      if (!window.confirm('למחוק את שלב התהליך?')) return;
-      const { error } = await state.sb.from('recruitment_process_steps').delete().eq('id', stepId);
-      if (error) return showSupabaseError('מחיקת שלב תהליך נכשלה', error);
-      await loadRecruitmentBoard();
-      return;
-    }
-
-    if (action === 'set-current-step') {
-      const processId = button.dataset.processId;
-      const process = state.cache.records.recruitmentProcesses.find((item) => item.id === processId);
-      const step = (process?.recruitment_process_steps || []).find((item) => item.id === stepId);
-      if (!process || !step) return;
-      const matchedStage = (state.cache.records.recruitmentStages || []).find((item) => item.stage_name === step.step_name && item.is_active);
-
-      await state.sb
-        .from('recruitment_process_steps')
-        .update({ step_status: 'pending' })
-        .eq('recruitment_process_id', processId)
-        .eq('step_status', 'in_progress');
-
-      const { error: stepError } = await state.sb.from('recruitment_process_steps').update({ step_status: 'in_progress' }).eq('id', stepId);
-      if (stepError) return showSupabaseError('עדכון שלב נוכחי נכשל', stepError);
-
-      const { error: processError } = await state.sb
-        .from('recruitment_processes')
-        .update({
-          next_status_check_date: step.next_check_date,
-          reminder_enabled: step.reminder_enabled,
-          current_stage_template_id: matchedStage?.id || null,
-        })
-        .eq('id', processId);
-      if (processError) return showSupabaseError('עדכון תאריך בדיקה נכשל', processError);
-
-      await loadRecruitmentBoard();
-    }
   });
 
   $('#recruitment-stage-form').addEventListener('submit', async (event) => {
