@@ -1246,10 +1246,35 @@ function drawChart(slot, canvasSelector, type, data, yLimits) {
       resizeDelay: 120,
       animation: false,
       scales: {
-        y: yLimits ? { beginAtZero: true, max: yLimits.max } : { beginAtZero: true },
+        y: yLimits
+          ? {
+              beginAtZero: true,
+              max: yLimits.max,
+              ticks: { color: '#566b82', font: { family: 'Heebo' } },
+              grid: { color: 'rgba(90, 115, 139, 0.18)' },
+            }
+          : {
+              beginAtZero: true,
+              ticks: { color: '#566b82', font: { family: 'Heebo' } },
+              grid: { color: 'rgba(90, 115, 139, 0.18)' },
+            },
+        x: {
+          ticks: { color: '#566b82', font: { family: 'Heebo' } },
+          grid: { display: false },
+        },
       },
       plugins: {
-        legend: { position: 'bottom' },
+        legend: {
+          position: 'bottom',
+          labels: {
+            color: '#38526d',
+            boxWidth: 14,
+            boxHeight: 14,
+            usePointStyle: true,
+            pointStyle: 'circle',
+            font: { family: 'Heebo', weight: '600' },
+          },
+        },
       },
     },
   });
