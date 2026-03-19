@@ -162,6 +162,22 @@
               <button class="btn btn-primary" type="submit">שמירה</button>
             </form>
           </div>
+          <div class="card">
+            <div class="section-head">
+              <h3 id="employee-form-title">עובד חדש תחת ראש צוות</h3>
+              <button id="employee-cancel-edit" class="btn btn-secondary hidden" type="button">ביטול עריכה</button>
+            </div>
+            <form id="employee-form" class="form-grid">
+              <input name="id" type="hidden" />
+              <select name="team_lead_id" id="employee-team-lead" required></select>
+              <input name="full_name" placeholder="שם עובד" required />
+              <input name="role_title" placeholder="תפקיד" />
+              <input name="email" type="email" placeholder="מייל" />
+              <input name="start_date" type="date" />
+              <textarea name="notes" placeholder="הערות"></textarea>
+              <button class="btn btn-primary" type="submit">שמירה</button>
+            </form>
+          </div>
           <div class="card" id="team-workload"></div>
         </section>
 

@@ -13,6 +13,7 @@ const state = {
       projects: [],
       clients: [],
       teamLeads: [],
+      employees: [],
       recruitmentProcesses: [],
       recruitmentProcessSteps: [],
       recruitmentStages: [],
@@ -94,6 +95,18 @@ function isMissingRecruitmentMasterTableError(error) {
     message.includes('recruitment_process_positions') ||
     message.includes('current_stage_template_id')
   );
+}
+
+function isMissingEmployeesTableError(error) {
+  if (!error) return false;
+  const message = String(error.message || '').toLowerCase();
+  const code = String(error.code || '').toLowerCase();
+  return code === 'pgrst205' || message.includes('public.employees') || message.includes('relation "employees" does not exist');
+}
+
+function isHiredStageName(stageName) {
+  const normalized = String(stageName || '').trim().toLowerCase();
+  return normalized === 'hired' || normalized === 'התקבל' || normalized === 'accepted';
 }
 
 function getActiveRecruitmentStages() {
@@ -235,6 +248,7 @@ function setFormMode(formName, isEditing) {
     project: ['#project-form-title', '#project-cancel-edit', 'פרויקט חדש', 'עריכת פרויקט'],
     client: ['#client-form-title', '#client-cancel-edit', 'לקוח חדש', 'עריכת לקוח'],
     'team-lead': ['#team-lead-form-title', '#team-lead-cancel-edit', 'ראש צוות חדש', 'עריכת ראש צוות'],
+    employee: ['#employee-form-title', '#employee-cancel-edit', 'עובד חדש תחת ראש צוות', 'עריכת עובד'],
     recruitment: ['#recruitment-form-title', '#recruitment-cancel-edit', 'מגויס חדש', 'עריכת מגויס'],
     'recruitment-stage': ['#recruitment-stage-form-title', '#recruitment-stage-cancel-edit', 'שלב גיוס חדש', 'עריכת שלב גיוס'],
     position: ['#position-form-title', '#position-cancel-edit', 'תקן חדש', 'עריכת תקן'],
@@ -282,6 +296,14 @@ function resetRecruitmentForm() {
   }
   setFormMode('recruitment', false);
   renderRecruitmentPositionOptions();
+}
+
+function resetEmployeeForm() {
+  const form = $('#employee-form');
+  if (!form) return;
+  form.reset();
+  form.elements.id.value = '';
+  setFormMode('employee', false);
 }
 
 function resetKnowledgeForm() {
@@ -360,6 +382,7 @@ async function loadLookups() {
 
   fillSelect($('#project-client'), state.cache.clients, 'בחר לקוח', (item) => item.id, (item) => item.company_name);
   fillSelect($('#project-team-lead'), state.cache.teamLeads, 'בחר ראש צוות', (item) => item.id, (item) => item.full_name);
+  fillSelect($('#employee-team-lead'), state.cache.teamLeads, 'בחר ראש צוות', (item) => item.id, (item) => item.full_name);
   fillSelect($('#recruitment-team-lead'), state.cache.teamLeads, 'בחר ראש צוות', (item) => item.id, (item) => item.full_name);
   fillSelect($('#meeting-client'), state.cache.clients, 'בחר לקוח', (item) => item.id, (item) => item.company_name);
   fillSelect($('#meeting-project'), state.cache.projects, 'בחר פרויקט', (item) => item.id, (item) => item.name);
@@ -722,13 +745,14 @@ async function loadClients() {
 }
 
 async function loadTeamWorkload() {
-  const [teamLeadsRes, workloadRes, recruitmentRes] = await Promise.all([
+  const [teamLeadsRes, workloadRes, recruitmentRes, employeesRes] = await Promise.all([
     state.sb.from('team_leads').select('id,full_name,team_name,domain,email,is_available').order('full_name'),
     state.sb.from('v_team_lead_workload').select('*').order('full_name'),
     state.sb
       .from('recruitment_processes')
       .select('id,team_lead_id,candidate_name,role_title,status,current_stage_template_id,updated_at,recruitment_stage_templates(stage_name)')
       .order('updated_at', { ascending: false }),
+    state.sb.from('employees').select('id,team_lead_id,full_name,role_title,email,start_date,notes,created_at').order('created_at', { ascending: false }),
   ]);
 
   if (teamLeadsRes.error || workloadRes.error) {
@@ -743,22 +767,41 @@ async function loadTeamWorkload() {
   }
 
   const recruitmentRows = recruitmentTableMissing ? [] : recruitmentRes.data || [];
+  const employeesTableMissing = isMissingEmployeesTableError(employeesRes.error);
+  if (employeesRes.error && !employeesTableMissing) {
+    showSupabaseError('שגיאה בטעינת רשימת העובדים', employeesRes.error);
+    return;
+  }
+  const employeesRows = employeesTableMissing ? [] : employeesRes.data || [];
 
   const workloadById = new Map((workloadRes.data || []).map((item) => [item.team_lead_id, item]));
   const recruitmentById = new Map();
+  const employeesById = new Map();
   recruitmentRows.forEach((item) => {
     if (!recruitmentById.has(item.team_lead_id)) {
       recruitmentById.set(item.team_lead_id, []);
     }
     recruitmentById.get(item.team_lead_id).push(item);
   });
+  employeesRows.forEach((item) => {
+    if (!employeesById.has(item.team_lead_id)) {
+      employeesById.set(item.team_lead_id, []);
+    }
+    employeesById.get(item.team_lead_id).push(item);
+  });
 
   state.cache.records.teamLeads = teamLeadsRes.data || [];
+  state.cache.records.employees = employeesRows;
   state.cache.records.recruitmentProcesses = recruitmentRows;
 
-  $('#team-workload').innerHTML = `<h3>עומס עבודה</h3><div class="list">${state.cache.records.teamLeads
+  const employeesWarning = employeesTableMissing
+    ? '<p class="recruitment-warning">טבלת עובדים לא קיימת עדיין. יש להריץ: supabase/add_employees_auto_sync.sql</p>'
+    : '';
+
+  $('#team-workload').innerHTML = `<h3>עומס עבודה</h3>${employeesWarning}<div class="list">${state.cache.records.teamLeads
     .map((lead) => {
       const workload = workloadById.get(lead.id) || {};
+      const employeesItems = (employeesById.get(lead.id) || []).sort((left, right) => left.full_name.localeCompare(right.full_name, 'he'));
       const recruitmentItems = (recruitmentById.get(lead.id) || []).sort((left, right) => {
         const statusGap = recruitmentStatusOrder.indexOf(left.status) - recruitmentStatusOrder.indexOf(right.status);
         if (statusGap !== 0) return statusGap;
@@ -777,6 +820,19 @@ async function loadTeamWorkload() {
             .join('')}</div>`
         : '<div class="recruitment-empty">אין כרגע תהליכי גיוס.</div>';
 
+      const employeesListHtml = employeesItems.length
+        ? `<div class="employees-list">${employeesItems
+            .map(
+              (item) => `<div class="employee-item">
+                <strong>${item.full_name}</strong>
+                <div class="employee-meta">${item.role_title || 'ללא תפקיד'}${item.start_date ? ` | התחלה: ${item.start_date}` : ''}</div>
+                <div class="employee-meta">${item.email || 'ללא מייל'}</div>
+                ${renderActionButtons('employee', item.id)}
+              </div>`
+            )
+            .join('')}</div>`
+        : '<div class="recruitment-empty">אין עובדים משויכים כרגע.</div>';
+
       return `<div class="list-item">
         <div class="list-item-head">
           <strong>${lead.full_name}</strong>
@@ -789,11 +845,62 @@ async function loadTeamWorkload() {
         <div>פרויקטים פעילים: ${workload.active_projects || 0}</div>
         <div>משימות פתוחות: ${workload.open_tasks || 0}</div>
         <div>משימות סגורות: ${workload.closed_tasks || 0}</div>
+        <div class="employees-head">עובדים פעילים: ${employeesItems.length}</div>
+        ${employeesListHtml}
         <div class="recruitment-head">תהליכי גיוס: ${recruitmentItems.length}</div>
         ${recruitmentListHtml}
       </div>`;
     })
     .join('')}</div>`;
+}
+
+function getEmployeeKey(teamLeadId, fullName) {
+  return `${teamLeadId || ''}::${String(fullName || '').trim().toLowerCase()}`;
+}
+
+async function syncHiredRecruitmentsToEmployees(records) {
+  if (!state.sb || !Array.isArray(records) || !records.length) return false;
+
+  const hiredRows = records.filter(
+    (item) =>
+      item.team_lead_id &&
+      item.candidate_name &&
+      (item.status === 'hired' || isHiredStageName(item.recruitment_stage_templates?.stage_name))
+  );
+  if (!hiredRows.length) return false;
+
+  const existingRes = await state.sb.from('employees').select('team_lead_id,full_name');
+  if (existingRes.error) {
+    if (isMissingEmployeesTableError(existingRes.error)) {
+      return false;
+    }
+    showSupabaseError('שגיאה בסנכרון עובדים מגיוס', existingRes.error);
+    return false;
+  }
+
+  const existingKeys = new Set((existingRes.data || []).map((item) => getEmployeeKey(item.team_lead_id, item.full_name)));
+  const toInsert = hiredRows
+    .filter((item) => !existingKeys.has(getEmployeeKey(item.team_lead_id, item.candidate_name)))
+    .map((item) => ({
+      team_lead_id: item.team_lead_id,
+      full_name: item.candidate_name,
+      role_title: item.role_title || null,
+      start_date: item.updated_at ? new Date(item.updated_at).toISOString().slice(0, 10) : null,
+      notes: 'נוסף אוטומטית מתהליך גיוס שהושלם',
+    }));
+
+  if (!toInsert.length) return false;
+
+  const { error } = await state.sb.from('employees').insert(toInsert);
+  if (error) {
+    const message = String(error.message || '').toLowerCase();
+    if (!message.includes('duplicate key')) {
+      showSupabaseError('העברת מגויסים לעובדים נכשלה', error);
+    }
+    return false;
+  }
+
+  return true;
 }
 
 async function loadRecruitmentBoard() {
@@ -848,6 +955,11 @@ async function loadRecruitmentBoard() {
   state.cache.records.recruitmentProcessPositions = records.flatMap((item) =>
     (item.recruitment_process_positions || []).map((link) => ({ ...link, recruitment_process_id: item.id }))
   );
+
+  const synced = await syncHiredRecruitmentsToEmployees(records);
+  if (synced) {
+    await loadTeamWorkload();
+  }
 
   renderRecruitmentPositionOptions();
 
@@ -1189,6 +1301,22 @@ function editTeamLead(id) {
   setFormMode('team-lead', true);
 }
 
+function editEmployee(id) {
+  const employee = getRecord('employees', id);
+  if (!employee) return;
+  const form = $('#employee-form');
+  if (!form) return;
+
+  form.elements.id.value = employee.id;
+  form.elements.team_lead_id.value = employee.team_lead_id || '';
+  form.elements.full_name.value = employee.full_name || '';
+  form.elements.role_title.value = employee.role_title || '';
+  form.elements.email.value = employee.email || '';
+  form.elements.start_date.value = employee.start_date || '';
+  form.elements.notes.value = employee.notes || '';
+  setFormMode('employee', true);
+}
+
 function editKnowledge(id) {
   const item = getRecord('knowledgeItems', id);
   if (!item) return;
@@ -1388,6 +1516,32 @@ function wireForms() {
     await loadAll();
   });
 
+  $('#employee-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!state.sb) return showMessage('יש להתחבר קודם ל-Supabase');
+
+    const form = event.target;
+    const payload = {
+      team_lead_id: form.elements.team_lead_id.value || null,
+      full_name: form.elements.full_name.value,
+      role_title: form.elements.role_title.value || null,
+      email: form.elements.email.value || null,
+      start_date: form.elements.start_date.value || null,
+      notes: form.elements.notes.value || null,
+    };
+
+    const recordId = form.elements.id.value;
+    const query = recordId
+      ? state.sb.from('employees').update(payload).eq('id', recordId)
+      : state.sb.from('employees').insert(payload);
+    const { error } = await query;
+
+    if (error) return showSupabaseError('שמירת עובד נכשלה', error);
+
+    resetEmployeeForm();
+    await loadTeamWorkload();
+  });
+
   $('#kb-form').addEventListener('submit', async (event) => {
     event.preventDefault();
     if (!state.sb) return showMessage('יש להתחבר קודם ל-Supabase');
@@ -1442,12 +1596,17 @@ function wireForms() {
     if (!state.sb) return showMessage('יש להתחבר קודם ל-Supabase');
 
     const form = event.target;
+    const existingRecord = form.elements.id.value ? getRecord('recruitmentProcesses', form.elements.id.value) : null;
+    const selectedStage = (state.cache.records.recruitmentStages || []).find(
+      (item) => String(item.id) === String(form.elements.current_stage_template_id?.value || '')
+    );
+    const resolvedStatus = isHiredStageName(selectedStage?.stage_name) ? 'hired' : existingRecord?.status || 'new';
     const selectedPositionIds = Array.from(form.querySelectorAll('input[name="recruitment_position_ids"]:checked')).map((input) => input.value);
     const payload = {
       candidate_name: form.elements.candidate_name.value,
       role_title: form.elements.role_title.value,
       team_lead_id: form.elements.team_lead_id.value || null,
-      status: 'new',
+      status: resolvedStatus,
       notes: form.elements.notes.value || null,
     };
 
@@ -1541,6 +1700,7 @@ function wireForms() {
   $('#project-cancel-edit').addEventListener('click', resetProjectForm);
   $('#client-cancel-edit').addEventListener('click', resetClientForm);
   $('#team-lead-cancel-edit').addEventListener('click', resetTeamLeadForm);
+  $('#employee-cancel-edit').addEventListener('click', resetEmployeeForm);
   $('#recruitment-cancel-edit').addEventListener('click', resetRecruitmentForm);
   $('#recruitment-stage-cancel-edit').addEventListener('click', resetRecruitmentStageForm);
   $('#position-cancel-edit').addEventListener('click', resetPositionForm);
@@ -1554,6 +1714,7 @@ function registerGlobalActions() {
       if (entity === 'project') editProject(id);
       if (entity === 'client') editClient(id);
       if (entity === 'team-lead') editTeamLead(id);
+      if (entity === 'employee') editEmployee(id);
       if (entity === 'recruitment') editRecruitment(id);
       if (entity === 'recruitment-stage') editRecruitmentStage(id);
       if (entity === 'position') editPosition(id);
@@ -1564,6 +1725,7 @@ function registerGlobalActions() {
       if (entity === 'project') await deleteById('projects', id, 'הפרויקט');
       if (entity === 'client') await deleteById('clients', id, 'הלקוח');
       if (entity === 'team-lead') await deleteById('team_leads', id, 'ראש הצוות');
+      if (entity === 'employee') await deleteById('employees', id, 'העובד');
       if (entity === 'recruitment') await deleteById('recruitment_processes', id, 'תהליך הגיוס');
       if (entity === 'recruitment-stage') await deleteById('recruitment_stage_templates', id, 'שלב הגיוס');
       if (entity === 'position') await deleteById('recruitment_positions', id, 'התקן');
