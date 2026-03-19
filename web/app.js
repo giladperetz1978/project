@@ -445,6 +445,20 @@ function saveDashboardShortcutViews(views) {
   localStorage.setItem(DASHBOARD_SHORTCUTS_STORAGE_KEY, JSON.stringify(views));
 }
 
+function moveDashboardShortcutView(views, draggedView, targetView) {
+  if (!draggedView || !targetView || draggedView === targetView) return views;
+
+  const nextViews = views.filter((view) => view !== draggedView);
+  const targetIndex = nextViews.indexOf(targetView);
+  if (targetIndex === -1) {
+    nextViews.push(draggedView);
+    return nextViews;
+  }
+
+  nextViews.splice(targetIndex, 0, draggedView);
+  return nextViews;
+}
+
 function renderDashboardShortcutManager() {
   const shortcutsHost = $('#dashboard-shortcuts');
   const controlsHost = $('#dashboard-shortcut-controls');
@@ -457,15 +471,34 @@ function renderDashboardShortcutManager() {
   const visibleOptions = options.filter((item) => visibleSet.has(item.view));
 
   shortcutsHost.innerHTML = visibleOptions
-    .map((item) => `<button type="button" class="dashboard-shortcut" data-view="${item.view}">${item.label}</button>`)
+    .map(
+      (item, index) => `<article class="dashboard-shortcut" data-view="${item.view}" draggable="true">
+        <div class="dashboard-shortcut-head">
+          <div class="dashboard-shortcut-title">${item.label}</div>
+          <span class="status-chip status-chip-online">מוצג</span>
+        </div>
+        <div class="dashboard-shortcut-meta">מיקום ${index + 1} בדשבורד</div>
+        <div class="dashboard-shortcut-actions">
+          <button type="button" class="btn btn-primary dashboard-shortcut-open" data-view="${item.view}">פתח</button>
+          <span class="dashboard-shortcut-drag">גרור כדי לשנות סדר</span>
+        </div>
+      </article>`
+    )
     .join('');
   emptyState.classList.toggle('hidden', visibleOptions.length > 0);
 
   controlsHost.innerHTML = options
     .map(
-      (item) => `<div class="dashboard-option-row">
-        <span>${item.label}</span>
-        <button type="button" class="btn ${visibleSet.has(item.view) ? 'btn-danger' : 'btn-secondary'} dashboard-option-toggle" data-view="${item.view}">${visibleSet.has(item.view) ? 'הסר' : 'הוסף'}</button>
+      (item) => `<div class="dashboard-option-row" data-view="${item.view}">
+        <div class="dashboard-option-head">
+          <span class="dashboard-option-name">${item.label}</span>
+          <span class="status-chip ${visibleSet.has(item.view) ? 'status-chip-online' : 'status-chip-pending'}">${visibleSet.has(item.view) ? 'מוצג בדשבורד' : 'לא מוצג'}</span>
+        </div>
+        <div class="dashboard-option-meta">הסטטוס מתעדכן מיד כשמוסיפים, מסירים או משנים סדר.</div>
+        <div class="dashboard-option-actions">
+          <button type="button" class="btn ${visibleSet.has(item.view) ? 'btn-danger' : 'btn-secondary'} dashboard-option-toggle" data-view="${item.view}">${visibleSet.has(item.view) ? 'הסר' : 'הוסף'}</button>
+          <button type="button" class="btn btn-primary dashboard-shortcut-open ${visibleSet.has(item.view) ? '' : 'hidden'}" data-view="${item.view}">פתח מהדשבורד</button>
+        </div>
       </div>`
     )
     .join('');
@@ -1591,12 +1624,56 @@ function navigateToView(viewName) {
 
 function wireDashboardShortcuts() {
   $('#dashboard-shortcuts')?.addEventListener('click', (event) => {
-    const button = event.target.closest('.dashboard-shortcut');
+    const button = event.target.closest('.dashboard-shortcut-open');
     if (!button) return;
     navigateToView(button.dataset.view);
   });
 
+  $('#dashboard-shortcuts')?.addEventListener('dragstart', (event) => {
+    const card = event.target.closest('.dashboard-shortcut');
+    if (!card) return;
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', card.dataset.view);
+  });
+
+  $('#dashboard-shortcuts')?.addEventListener('dragover', (event) => {
+    const card = event.target.closest('.dashboard-shortcut');
+    if (!card) return;
+    event.preventDefault();
+    card.classList.add('drag-over');
+  });
+
+  $('#dashboard-shortcuts')?.addEventListener('dragleave', (event) => {
+    const card = event.target.closest('.dashboard-shortcut');
+    if (!card) return;
+    card.classList.remove('drag-over');
+  });
+
+  $('#dashboard-shortcuts')?.addEventListener('drop', (event) => {
+    const card = event.target.closest('.dashboard-shortcut');
+    if (!card) return;
+    event.preventDefault();
+    card.classList.remove('drag-over');
+
+    const draggedView = event.dataTransfer.getData('text/plain');
+    const targetView = card.dataset.view;
+    const visibleViews = getStoredDashboardShortcutViews();
+    const nextViews = moveDashboardShortcutView(visibleViews, draggedView, targetView);
+    saveDashboardShortcutViews(nextViews);
+    renderDashboardShortcutManager();
+  });
+
+  $('#dashboard-shortcuts')?.addEventListener('dragend', () => {
+    document.querySelectorAll('.dashboard-shortcut.drag-over').forEach((card) => card.classList.remove('drag-over'));
+  });
+
   $('#dashboard-shortcut-controls')?.addEventListener('click', (event) => {
+    const openButton = event.target.closest('.dashboard-shortcut-open');
+    if (openButton) {
+      navigateToView(openButton.dataset.view);
+      return;
+    }
+
     const button = event.target.closest('.dashboard-option-toggle');
     if (!button) return;
 

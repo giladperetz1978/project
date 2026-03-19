@@ -308,8 +308,6 @@ textarea {
   border-radius: 14px;
   padding: 14px;
   background: linear-gradient(145deg, #f8fbff, #ffffff);
-  color: var(--text);
-  font-weight: 700;
   text-align: right;
   cursor: pointer;
   transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
@@ -319,6 +317,43 @@ textarea {
   transform: translateY(-2px);
   border-color: #b7d3ee;
   box-shadow: 0 12px 28px rgba(10, 31, 68, 0.08);
+}
+
+.dashboard-shortcut.drag-over {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.15);
+}
+
+.dashboard-shortcut-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.dashboard-shortcut-title {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.dashboard-shortcut-meta {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.dashboard-shortcut-actions {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.dashboard-shortcut-drag {
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 700;
 }
 
 .dashboard-shortcut-empty {
@@ -337,14 +372,36 @@ textarea {
 }
 
 .dashboard-option-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: grid;
   gap: 12px;
   padding: 12px;
   border: 1px solid #deebf6;
   border-radius: 12px;
   background: #f8fbff;
+}
+
+.dashboard-option-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.dashboard-option-name {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.dashboard-option-meta {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.dashboard-option-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 }
 
 .form-grid {
@@ -709,6 +766,13 @@ td {
   }
 
   .dashboard-option-row {
+    align-items: stretch;
+  }
+
+  .dashboard-option-head,
+  .dashboard-option-actions,
+  .dashboard-shortcut-actions,
+  .dashboard-shortcut-head {
     align-items: stretch;
     flex-direction: column;
   }
