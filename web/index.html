@@ -231,9 +231,24 @@
 
         <section id="view-analytics" class="view">
           <div class="chart-grid">
-            <article class="card"><h3>התקדמות פרויקטים</h3><canvas id="progress-chart"></canvas></article>
-            <article class="card"><h3>עומס ראשי צוותים</h3><canvas id="workload-chart"></canvas></article>
-            <article class="card"><h3>תקציב מתוכנן מול בפועל</h3><canvas id="budget-chart"></canvas></article>
+            <article class="card">
+              <h3>התקדמות פרויקטים</h3>
+              <div class="chart-frame">
+                <canvas id="progress-chart"></canvas>
+              </div>
+            </article>
+            <article class="card">
+              <h3>עומס ראשי צוותים</h3>
+              <div class="chart-frame">
+                <canvas id="workload-chart"></canvas>
+              </div>
+            </article>
+            <article class="card">
+              <h3>תקציב מתוכנן מול בפועל</h3>
+              <div class="chart-frame chart-frame-wide">
+                <canvas id="budget-chart"></canvas>
+              </div>
+            </article>
           </div>
         </section>
 

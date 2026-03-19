@@ -577,6 +577,22 @@ td {
   grid-column: span 2;
 }
 
+.chart-frame {
+  position: relative;
+  height: 320px;
+  width: 100%;
+}
+
+.chart-frame.chart-frame-wide {
+  height: 360px;
+}
+
+.chart-frame canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
 .recruitment-board-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(180px, 1fr));
@@ -783,6 +799,11 @@ td {
 
   .chart-grid .card:last-child {
     grid-column: span 1;
+  }
+
+  .chart-frame,
+  .chart-frame.chart-frame-wide {
+    height: 280px;
   }
 
   .form-grid {

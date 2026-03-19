@@ -973,6 +973,8 @@ function drawChart(slot, canvasSelector, type, data, yLimits) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      resizeDelay: 120,
+      animation: false,
       scales: {
         y: yLimits ? { beginAtZero: true, max: yLimits.max } : { beginAtZero: true },
       },
