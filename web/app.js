@@ -49,6 +49,8 @@ const recruitmentStepStatusLabel = {
   blocked: 'חסום',
 };
 
+const DASHBOARD_SHORTCUTS_STORAGE_KEY = 'dashboard_shortcut_views';
+
 const $ = (selector) => document.querySelector(selector);
 
 function showMessage(text) {
@@ -411,6 +413,62 @@ async function loadDashboard() {
         </div>`
       )
       .join('') || '<p>אין התראות.</p>';
+}
+
+function getDashboardShortcutOptions() {
+  return Array.from(document.querySelectorAll('.nav-btn'))
+    .map((button) => ({
+      view: button.dataset.view,
+      label: button.textContent.trim(),
+    }))
+    .filter((item) => item.view && item.view !== 'dashboard');
+}
+
+function getStoredDashboardShortcutViews() {
+  const options = getDashboardShortcutOptions();
+  const availableViews = new Set(options.map((item) => item.view));
+  const fallbackViews = options.map((item) => item.view);
+
+  try {
+    const parsed = JSON.parse(localStorage.getItem(DASHBOARD_SHORTCUTS_STORAGE_KEY) || 'null');
+    if (!Array.isArray(parsed)) {
+      return fallbackViews;
+    }
+
+    return parsed.filter((view) => availableViews.has(view));
+  } catch (error) {
+    return fallbackViews;
+  }
+}
+
+function saveDashboardShortcutViews(views) {
+  localStorage.setItem(DASHBOARD_SHORTCUTS_STORAGE_KEY, JSON.stringify(views));
+}
+
+function renderDashboardShortcutManager() {
+  const shortcutsHost = $('#dashboard-shortcuts');
+  const controlsHost = $('#dashboard-shortcut-controls');
+  const emptyState = $('#dashboard-shortcut-empty');
+  if (!shortcutsHost || !controlsHost || !emptyState) return;
+
+  const options = getDashboardShortcutOptions();
+  const visibleViews = getStoredDashboardShortcutViews();
+  const visibleSet = new Set(visibleViews);
+  const visibleOptions = options.filter((item) => visibleSet.has(item.view));
+
+  shortcutsHost.innerHTML = visibleOptions
+    .map((item) => `<button type="button" class="dashboard-shortcut" data-view="${item.view}">${item.label}</button>`)
+    .join('');
+  emptyState.classList.toggle('hidden', visibleOptions.length > 0);
+
+  controlsHost.innerHTML = options
+    .map(
+      (item) => `<div class="dashboard-option-row">
+        <span>${item.label}</span>
+        <button type="button" class="btn ${visibleSet.has(item.view) ? 'btn-danger' : 'btn-secondary'} dashboard-option-toggle" data-view="${item.view}">${visibleSet.has(item.view) ? 'הסר' : 'הוסף'}</button>
+      </div>`
+    )
+    .join('');
 }
 
 async function loadProjectsTable() {
@@ -1514,12 +1572,47 @@ function registerGlobalActions() {
 function wireNavigation() {
   document.querySelectorAll('.nav-btn').forEach((button) => {
     button.addEventListener('click', () => {
-      document.querySelectorAll('.nav-btn').forEach((item) => item.classList.remove('active'));
-      button.classList.add('active');
-
-      document.querySelectorAll('.view').forEach((view) => view.classList.remove('active'));
-      $('#view-' + button.dataset.view).classList.add('active');
+      navigateToView(button.dataset.view);
     });
+  });
+}
+
+function navigateToView(viewName) {
+  const targetButton = document.querySelector(`.nav-btn[data-view="${viewName}"]`);
+  const targetView = $('#view-' + viewName);
+  if (!targetButton || !targetView) return;
+
+  document.querySelectorAll('.nav-btn').forEach((item) => item.classList.remove('active'));
+  targetButton.classList.add('active');
+
+  document.querySelectorAll('.view').forEach((view) => view.classList.remove('active'));
+  targetView.classList.add('active');
+}
+
+function wireDashboardShortcuts() {
+  $('#dashboard-shortcuts')?.addEventListener('click', (event) => {
+    const button = event.target.closest('.dashboard-shortcut');
+    if (!button) return;
+    navigateToView(button.dataset.view);
+  });
+
+  $('#dashboard-shortcut-controls')?.addEventListener('click', (event) => {
+    const button = event.target.closest('.dashboard-option-toggle');
+    if (!button) return;
+
+    const options = getDashboardShortcutOptions();
+    const optionViews = options.map((item) => item.view);
+    const selectedViews = new Set(getStoredDashboardShortcutViews());
+    const targetView = button.dataset.view;
+
+    if (selectedViews.has(targetView)) {
+      selectedViews.delete(targetView);
+    } else {
+      selectedViews.add(targetView);
+    }
+
+    saveDashboardShortcutViews(optionViews.filter((view) => selectedViews.has(view)));
+    renderDashboardShortcutManager();
   });
 }
 
@@ -1540,6 +1633,8 @@ function wireConnectButton() {
 function init() {
   updateSupabaseStatus('pending', 'האפליקציה עלתה. בודק כעת את החיבור ל-Supabase.');
   wireNavigation();
+  wireDashboardShortcuts();
+  renderDashboardShortcutManager();
   wireConnectButton();
   wireForms();
   registerGlobalActions();

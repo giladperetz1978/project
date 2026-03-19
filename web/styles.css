@@ -291,6 +291,62 @@ textarea {
   gap: 12px;
 }
 
+.dashboard-panel-copy {
+  margin: 0;
+  color: var(--muted);
+}
+
+.dashboard-shortcuts-grid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.dashboard-shortcut {
+  border: 1px solid #d8e7f5;
+  border-radius: 14px;
+  padding: 14px;
+  background: linear-gradient(145deg, #f8fbff, #ffffff);
+  color: var(--text);
+  font-weight: 700;
+  text-align: right;
+  cursor: pointer;
+  transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.dashboard-shortcut:hover {
+  transform: translateY(-2px);
+  border-color: #b7d3ee;
+  box-shadow: 0 12px 28px rgba(10, 31, 68, 0.08);
+}
+
+.dashboard-shortcut-empty {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px dashed #c9dced;
+  border-radius: 12px;
+  color: var(--muted);
+  background: #f8fbff;
+}
+
+.dashboard-option-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.dashboard-option-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid #deebf6;
+  border-radius: 12px;
+  background: #f8fbff;
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -650,6 +706,11 @@ td {
   .split-grid,
   .chart-grid {
     grid-template-columns: 1fr;
+  }
+
+  .dashboard-option-row {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .recruitment-board-grid {
