@@ -90,10 +90,7 @@ body {
 }
 
 .supabase-config {
-  display: grid;
-  grid-template-columns: 1fr 1fr auto;
-  gap: 8px;
-  width: min(680px, 100%);
+  display: none;
 }
 
 .connection-panel {
@@ -680,7 +677,7 @@ td {
   }
 
   .supabase-config {
-    grid-template-columns: 1fr;
+    display: none;
   }
 
   .status-bar {
