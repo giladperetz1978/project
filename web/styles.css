@@ -313,6 +313,11 @@ textarea {
   transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
 }
 
+.dashboard-shortcut-alert {
+  border-color: #f7a31b;
+  background: linear-gradient(145deg, #fff9ef, #fff3d9);
+}
+
 .dashboard-shortcut:hover {
   transform: translateY(-2px);
   border-color: #b7d3ee;
@@ -340,6 +345,20 @@ textarea {
   margin-top: 10px;
   color: var(--muted);
   font-size: 0.92rem;
+}
+
+.dashboard-shortcut-summary {
+  margin-top: 10px;
+  display: grid;
+  gap: 4px;
+  color: var(--text);
+  font-size: 0.92rem;
+}
+
+.dashboard-shortcut-alert-text {
+  margin-top: 4px;
+  color: #9a6b00;
+  font-weight: 700;
 }
 
 .dashboard-shortcut-actions {
@@ -400,8 +419,14 @@ textarea {
 .dashboard-option-actions {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
+  flex-wrap: wrap;
   gap: 10px;
+}
+
+.dashboard-view-select {
+  min-width: 220px;
+  background: #fff;
 }
 
 .form-grid {

@@ -338,6 +338,8 @@ async function loadAll() {
     loadKnowledge(),
     loadMeetings(),
   ]);
+
+  renderDashboardShortcutManager();
 }
 
 async function loadLookups() {
@@ -445,6 +447,148 @@ function saveDashboardShortcutViews(views) {
   localStorage.setItem(DASHBOARD_SHORTCUTS_STORAGE_KEY, JSON.stringify(views));
 }
 
+function toDateStart(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function getDaysUntil(value) {
+  const targetDate = toDateStart(value);
+  if (!targetDate) return null;
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  return Math.ceil((targetDate.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
+}
+
+function getDashboardTopicSnapshot(viewName) {
+  const projects = state.cache.records.projects || [];
+  const clients = state.cache.records.clients || [];
+  const teamLeads = state.cache.records.teamLeads || [];
+  const recruitments = state.cache.records.recruitmentProcesses || [];
+  const stages = state.cache.records.recruitmentStages || [];
+  const positions = state.cache.records.positions || [];
+  const knowledgeItems = state.cache.records.knowledgeItems || [];
+  const meetings = state.cache.records.meetings || [];
+
+  if (viewName === 'projects') {
+    const activeCount = projects.filter((item) => item.status === 'active').length;
+    const riskCount = projects.filter((item) => item.health_status === 'red').length;
+    const nearDeadlineCount = projects.filter((item) => {
+      if (item.status === 'completed') return false;
+      const days = getDaysUntil(item.target_date);
+      return days !== null && days >= 0 && days <= 5;
+    }).length;
+
+    return {
+      lines: [`סה"כ פרויקטים: ${projects.length}`, `פעילים: ${activeCount}`],
+      alert: riskCount > 0 || nearDeadlineCount > 0,
+      alertText:
+        riskCount > 0
+          ? `${riskCount} פרויקטים בסיכון`
+          : nearDeadlineCount > 0
+            ? `${nearDeadlineCount} פרויקטים עם יעד קרוב`
+            : '',
+    };
+  }
+
+  if (viewName === 'clients') {
+    const sensitiveCount = clients.filter((item) => item.is_sensitive).length;
+    const lowSatisfactionCount = clients.filter((item) => Number(item.satisfaction_score || 0) > 0 && Number(item.satisfaction_score) <= 2).length;
+    return {
+      lines: [`סה"כ לקוחות: ${clients.length}`, `רגישים: ${sensitiveCount}`],
+      alert: lowSatisfactionCount > 0,
+      alertText: lowSatisfactionCount > 0 ? `${lowSatisfactionCount} לקוחות עם שביעות רצון נמוכה` : '',
+    };
+  }
+
+  if (viewName === 'team-leads') {
+    const unavailableCount = teamLeads.filter((item) => !item.is_available).length;
+    return {
+      lines: [`סה"כ ראשי צוות: ${teamLeads.length}`, `לא זמינים: ${unavailableCount}`],
+      alert: unavailableCount > 0,
+      alertText: unavailableCount > 0 ? `${unavailableCount} ראשי צוות לא זמינים` : '',
+    };
+  }
+
+  if (viewName === 'recruitment') {
+    const openCount = recruitments.filter((item) => !['hired', 'rejected'].includes(item.status)).length;
+    const checksSoon = recruitments.filter((item) => {
+      const days = getDaysUntil(item.next_status_check_date);
+      return days !== null && days >= 0 && days <= 3;
+    }).length;
+
+    return {
+      lines: [`תהליכי גיוס: ${recruitments.length}`, `פתוחים: ${openCount}`],
+      alert: checksSoon > 0,
+      alertText: checksSoon > 0 ? `${checksSoon} בדיקות סטטוס מתקרבות` : '',
+    };
+  }
+
+  if (viewName === 'recruitment-stages') {
+    const activeCount = stages.filter((item) => item.is_active).length;
+    return {
+      lines: [`סה"כ שלבים: ${stages.length}`, `פעילים: ${activeCount}`],
+      alert: stages.length > 0 && activeCount === 0,
+      alertText: stages.length > 0 && activeCount === 0 ? 'אין שלבי גיוס פעילים' : '',
+    };
+  }
+
+  if (viewName === 'positions') {
+    const activeCount = positions.filter((item) => item.is_active).length;
+    return {
+      lines: [`סה"כ תקנים: ${positions.length}`, `פעילים: ${activeCount}`],
+      alert: positions.length > 0 && activeCount === 0,
+      alertText: positions.length > 0 && activeCount === 0 ? 'כל התקנים כבויים' : '',
+    };
+  }
+
+  if (viewName === 'analytics') {
+    const riskCount = projects.filter((item) => item.health_status === 'red').length;
+    return {
+      lines: [`גרפים פעילים: 3`, `מקורות נתונים: ${projects.length + teamLeads.length}`],
+      alert: riskCount > 0,
+      alertText: riskCount > 0 ? `${riskCount} פרויקטים בסיכון משפיעים על הגרפים` : '',
+    };
+  }
+
+  if (viewName === 'knowledge') {
+    const recentCount = knowledgeItems.filter((item) => {
+      const days = getDaysUntil(item.created_at);
+      return days !== null && days <= 0 && days >= -7;
+    }).length;
+    return {
+      lines: [`סה"כ פריטי ידע: ${knowledgeItems.length}`, `נוספו השבוע: ${recentCount}`],
+      alert: false,
+      alertText: '',
+    };
+  }
+
+  if (viewName === 'meetings') {
+    const upcomingCount = meetings.filter((item) => {
+      const days = getDaysUntil(item.meeting_date);
+      return days !== null && days >= 0 && days <= 2;
+    }).length;
+    const overdueCount = meetings.filter((item) => {
+      const days = getDaysUntil(item.meeting_date);
+      return days !== null && days < 0;
+    }).length;
+    return {
+      lines: [`סה"כ פגישות: ${meetings.length}`, `מתקרבות (48ש): ${upcomingCount}`],
+      alert: upcomingCount > 0,
+      alertText: upcomingCount > 0 ? `${upcomingCount} פגישות מתקרבות` : overdueCount > 0 ? `${overdueCount} פגישות עבר` : '',
+    };
+  }
+
+  return {
+    lines: ['נתונים זמינים לאחר טעינה', ''],
+    alert: false,
+    alertText: '',
+  };
+}
+
 function moveDashboardShortcutView(views, draggedView, targetView) {
   if (!draggedView || !targetView || draggedView === targetView) return views;
 
@@ -469,39 +613,54 @@ function renderDashboardShortcutManager() {
   const visibleViews = getStoredDashboardShortcutViews();
   const visibleSet = new Set(visibleViews);
   const visibleOptions = options.filter((item) => visibleSet.has(item.view));
+  const existingSelected = $('#dashboard-view-select')?.value;
+  const selectedView = options.some((item) => item.view === existingSelected) ? existingSelected : options[0]?.view || '';
+  const selectedSnapshot = selectedView ? getDashboardTopicSnapshot(selectedView) : { lines: [], alert: false, alertText: '' };
 
   shortcutsHost.innerHTML = visibleOptions
     .map(
-      (item, index) => `<article class="dashboard-shortcut" data-view="${item.view}" draggable="true">
+      (item, index) => {
+        const snapshot = getDashboardTopicSnapshot(item.view);
+        return `<article class="dashboard-shortcut ${snapshot.alert ? 'dashboard-shortcut-alert' : ''}" data-view="${item.view}" draggable="true">
         <div class="dashboard-shortcut-head">
           <div class="dashboard-shortcut-title">${item.label}</div>
-          <span class="status-chip status-chip-online">מוצג</span>
+          <span class="status-chip ${snapshot.alert ? 'status-chip-offline' : 'status-chip-online'}">${snapshot.alert ? 'התראה' : 'תקין'}</span>
         </div>
         <div class="dashboard-shortcut-meta">מיקום ${index + 1} בדשבורד</div>
+        <div class="dashboard-shortcut-summary">
+          <div>${snapshot.lines[0] || ''}</div>
+          <div>${snapshot.lines[1] || ''}</div>
+          ${snapshot.alertText ? `<div class="dashboard-shortcut-alert-text">${snapshot.alertText}</div>` : ''}
+        </div>
         <div class="dashboard-shortcut-actions">
           <button type="button" class="btn btn-primary dashboard-shortcut-open" data-view="${item.view}">פתח</button>
           <span class="dashboard-shortcut-drag">גרור כדי לשנות סדר</span>
         </div>
-      </article>`
+      </article>`;
+      }
     )
     .join('');
   emptyState.classList.toggle('hidden', visibleOptions.length > 0);
 
-  controlsHost.innerHTML = options
-    .map(
-      (item) => `<div class="dashboard-option-row" data-view="${item.view}">
-        <div class="dashboard-option-head">
-          <span class="dashboard-option-name">${item.label}</span>
-          <span class="status-chip ${visibleSet.has(item.view) ? 'status-chip-online' : 'status-chip-pending'}">${visibleSet.has(item.view) ? 'מוצג בדשבורד' : 'לא מוצג'}</span>
-        </div>
-        <div class="dashboard-option-meta">הסטטוס מתעדכן מיד כשמוסיפים, מסירים או משנים סדר.</div>
-        <div class="dashboard-option-actions">
-          <button type="button" class="btn ${visibleSet.has(item.view) ? 'btn-danger' : 'btn-secondary'} dashboard-option-toggle" data-view="${item.view}">${visibleSet.has(item.view) ? 'הסר' : 'הוסף'}</button>
-          <button type="button" class="btn btn-primary dashboard-shortcut-open ${visibleSet.has(item.view) ? '' : 'hidden'}" data-view="${item.view}">פתח מהדשבורד</button>
-        </div>
-      </div>`
-    )
-    .join('');
+  controlsHost.innerHTML = `<div class="dashboard-option-row">
+    <div class="dashboard-option-head">
+      <span class="dashboard-option-name">ניהול מרשימה נגללת</span>
+      <span class="status-chip ${visibleSet.has(selectedView) ? 'status-chip-online' : 'status-chip-pending'}">${visibleSet.has(selectedView) ? 'מוצג בדשבורד' : 'לא מוצג'}</span>
+    </div>
+    <div class="dashboard-option-actions">
+      <select id="dashboard-view-select" class="dashboard-view-select">
+        ${options.map((item) => `<option value="${item.view}" ${item.view === selectedView ? 'selected' : ''}>${item.label}</option>`).join('')}
+      </select>
+      <button type="button" id="dashboard-add-shortcut" class="btn btn-primary" ${visibleSet.has(selectedView) ? 'disabled' : ''}>הוסף</button>
+      <button type="button" id="dashboard-remove-shortcut" class="btn btn-danger" ${visibleSet.has(selectedView) ? '' : 'disabled'}>הסר</button>
+      <button type="button" id="dashboard-open-shortcut" class="btn btn-secondary" ${visibleSet.has(selectedView) ? '' : 'disabled'}>פתח</button>
+    </div>
+    <div class="dashboard-option-meta">
+      ${selectedSnapshot.lines[0] || ''}<br />
+      ${selectedSnapshot.lines[1] || ''}
+      ${selectedSnapshot.alertText ? `<div class="dashboard-shortcut-alert-text">${selectedSnapshot.alertText}</div>` : ''}
+    </div>
+  </div>`;
 }
 
 async function loadProjectsTable() {
@@ -1480,25 +1639,31 @@ function wireDashboardShortcuts() {
     document.querySelectorAll('.dashboard-shortcut.drag-over').forEach((card) => card.classList.remove('drag-over'));
   });
 
-  $('#dashboard-shortcut-controls')?.addEventListener('click', (event) => {
-    const openButton = event.target.closest('.dashboard-shortcut-open');
-    if (openButton) {
-      navigateToView(openButton.dataset.view);
-      return;
-    }
+  $('#dashboard-shortcut-controls')?.addEventListener('change', (event) => {
+    if (event.target.id !== 'dashboard-view-select') return;
+    renderDashboardShortcutManager();
+  });
 
-    const button = event.target.closest('.dashboard-option-toggle');
-    if (!button) return;
+  $('#dashboard-shortcut-controls')?.addEventListener('click', (event) => {
+    const select = $('#dashboard-view-select');
+    const targetView = select?.value;
+    if (!targetView) return;
 
     const options = getDashboardShortcutOptions();
     const optionViews = options.map((item) => item.view);
     const selectedViews = new Set(getStoredDashboardShortcutViews());
-    const targetView = button.dataset.view;
 
-    if (selectedViews.has(targetView)) {
+    if (event.target.id === 'dashboard-open-shortcut') {
+      navigateToView(targetView);
+      return;
+    }
+
+    if (event.target.id === 'dashboard-remove-shortcut') {
       selectedViews.delete(targetView);
-    } else {
+    } else if (event.target.id === 'dashboard-add-shortcut') {
       selectedViews.add(targetView);
+    } else {
+      return;
     }
 
     saveDashboardShortcutViews(optionViews.filter((view) => selectedViews.has(view)));
