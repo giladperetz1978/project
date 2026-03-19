@@ -633,7 +633,6 @@ function renderDashboardShortcutManager() {
           ${snapshot.alertText ? `<div class="dashboard-shortcut-alert-text">${snapshot.alertText}</div>` : ''}
         </div>
         <div class="dashboard-shortcut-actions">
-          <button type="button" class="btn btn-primary dashboard-shortcut-open" data-view="${item.view}">פתח</button>
           <span class="dashboard-shortcut-drag">גרור כדי לשנות סדר</span>
         </div>
       </article>`;
@@ -1595,12 +1594,6 @@ function navigateToView(viewName) {
 }
 
 function wireDashboardShortcuts() {
-  $('#dashboard-shortcuts')?.addEventListener('click', (event) => {
-    const button = event.target.closest('.dashboard-shortcut-open');
-    if (!button) return;
-    navigateToView(button.dataset.view);
-  });
-
   $('#dashboard-shortcuts')?.addEventListener('dragstart', (event) => {
     const card = event.target.closest('.dashboard-shortcut');
     if (!card) return;
