@@ -11,6 +11,7 @@
 - `supabase/schema.sql` - סכמת DB מלאה (טבלאות, קשרים, FK, Views, Triggers, RLS)
 - `supabase/seed.sql` - נתוני התחלה
 - `supabase/add_recruitment_pipeline_safe.sql` - הוספת תהליכי גיוס בצורה בטוחה לפרויקט קיים
+- `supabase/add_goals_automation_safe.sql` - הוספת יעדי ראש צוות/עובדים + אוטומציית הצעות יעדים בצורה בטוחה
 - `web/index.html` - UI ראשי
 - `web/styles.css` - עיצוב
 - `web/app.js` - Supabase integration + CRUD + charts
