@@ -54,6 +54,9 @@ const recruitmentStepStatusLabel = {
 };
 
 const DASHBOARD_SHORTCUTS_STORAGE_KEY = 'dashboard_shortcut_views';
+const CURRENT_YEAR = new Date().getFullYear();
+const PREVIOUS_YEAR = CURRENT_YEAR - 1;
+const NEXT_YEAR = CURRENT_YEAR + 1;
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -247,6 +250,23 @@ function fillSelect(selectEl, items, emptyLabel, valueFn, labelFn) {
   });
 }
 
+function getGoalYearOptions() {
+  return [
+    { value: PREVIOUS_YEAR, label: `שנה קודמת (${PREVIOUS_YEAR})` },
+    { value: CURRENT_YEAR, label: `שנה נוכחית (${CURRENT_YEAR})` },
+    { value: NEXT_YEAR, label: `שנה קרובה (${NEXT_YEAR})` },
+  ];
+}
+
+function setDefaultEmployeeTargetFormValues() {
+  const form = $('#employee-target-form');
+  if (!form) return;
+  if (form.elements.target_year) form.elements.target_year.value = String(NEXT_YEAR);
+  if (form.elements.status) form.elements.status.value = 'active';
+  if (form.elements.is_continuing) form.elements.is_continuing.checked = false;
+  if (form.elements.recommendation_reason) form.elements.recommendation_reason.value = '';
+}
+
 function refreshGoalFormLookups() {
   fillSelect($('#target-team-lead'), state.cache.teamLeads, 'בחר ראש צוות', (item) => item.id, (item) => item.full_name);
   fillSelect(
@@ -263,9 +283,64 @@ function refreshGoalFormLookups() {
     (item) => item.id,
     (item) => item.title
   );
+
+  fillSelect(
+    $('#target-year'),
+    getGoalYearOptions(),
+    'בחר שנה',
+    (item) => String(item.value),
+    (item) => item.label
+  );
+
+  const statusSelect = $('#target-status');
+  if (statusSelect && !statusSelect.dataset.boundHint) {
+    statusSelect.dataset.boundHint = '1';
+    statusSelect.addEventListener('change', () => {
+      const form = $('#employee-target-form');
+      if (!form?.elements?.is_continuing) return;
+      if (statusSelect.value === 'completed' && Number(form.elements.target_year.value || 0) >= CURRENT_YEAR) {
+        form.elements.target_year.value = String(PREVIOUS_YEAR);
+      }
+    });
+  }
+
+  setDefaultEmployeeTargetFormValues();
 }
 
 function generateEmployeeGoalSuggestions(employee, allTargets) {
+  const role = String(employee.role_title || '').toLowerCase();
+  const templates = [];
+  if (role.includes('frontend')) {
+    templates.push({
+      title: 'להמשיך להצטיין באיכות פיתוח ו-UX',
+      description: 'שיפור עקבי בחוויית משתמש, נגישות ואיכות קוד בצד לקוח',
+      is_continuing: true,
+      recommendation_reason: 'נבחר לפי תחום Frontend של העובד',
+    });
+  }
+  if (role.includes('data')) {
+    templates.push({
+      title: 'להמשיך להוביל תובנות עסקיות מבוססות נתונים',
+      description: 'שיפור איכות ניתוחים, דיוק מדדים וערך עסקי מהדאטה',
+      is_continuing: true,
+      recommendation_reason: 'נבחר לפי תחום Data של העובד',
+    });
+  }
+  if (role.includes('devops') || role.includes('sre')) {
+    templates.push({
+      title: 'להמשיך לשפר יציבות ותהליכי CI/CD',
+      description: 'הקטנת תקלות פרודקשן ושיפור אמינות שירותים',
+      is_continuing: true,
+      recommendation_reason: 'נבחר לפי תחום DevOps/SRE של העובד',
+    });
+  }
+  templates.push({
+    title: 'להמשיך להצטיין בתפקיד',
+    description: 'יעד מתמשך לשמירה על ביצועים גבוהים לאורך השנה הקרובה',
+    is_continuing: true,
+    recommendation_reason: 'יעד מתמשך כללי מבוסס AI לפי פרופיל העובד',
+  });
+
   const titleMap = new Map();
   allTargets
     .filter((item) => item.employee_id === employee.id || item.employee?.team_lead_id === employee.team_lead_id)
@@ -273,10 +348,27 @@ function generateEmployeeGoalSuggestions(employee, allTargets) {
       const key = String(item.title || '').trim().toLowerCase();
       if (!key) return;
       if (!titleMap.has(key)) {
-        titleMap.set(key, { title: item.title, description: item.description || null, count: 0 });
+        titleMap.set(key, {
+          title: item.title,
+          description: item.description || null,
+          recommendation_reason: 'נגזר מיעדי עבר דומים של העובד/הצוות',
+          is_continuing: Boolean(item.is_continuing),
+          count: 0,
+        });
       }
-      titleMap.get(key).count += item.employee_id === employee.id ? 3 : 1;
+      titleMap.get(key).count += item.employee_id === employee.id ? 4 : 1;
+      if (Number(item.target_year) === PREVIOUS_YEAR) {
+        titleMap.get(key).count += 2;
+        titleMap.get(key).is_continuing = true;
+      }
     });
+
+  templates.forEach((template) => {
+    const key = String(template.title).trim().toLowerCase();
+    if (!titleMap.has(key)) {
+      titleMap.set(key, { ...template, count: 3 });
+    }
+  });
 
   return Array.from(titleMap.values())
     .sort((left, right) => right.count - left.count)
@@ -286,8 +378,11 @@ function generateEmployeeGoalSuggestions(employee, allTargets) {
       title: item.title,
       description: item.description,
       target_value: null,
-      period_start: new Date().toISOString().slice(0, 10),
-      period_end: null,
+      period_start: `${NEXT_YEAR}-01-01`,
+      period_end: `${NEXT_YEAR}-12-31`,
+      target_year: NEXT_YEAR,
+      is_continuing: Boolean(item.is_continuing),
+      recommendation_reason: item.recommendation_reason,
       status: 'proposed',
       source: 'auto_history',
     }));
@@ -378,6 +473,7 @@ function resetEmployeeTargetForm() {
   if (!form) return;
   form.reset();
   form.elements.id.value = '';
+  setDefaultEmployeeTargetFormValues();
   setFormMode('employee-target', false);
 }
 
@@ -829,7 +925,7 @@ async function loadGoals() {
       .order('updated_at', { ascending: false }),
     state.sb
       .from('employee_targets')
-      .select('id,employee_id,team_lead_target_id,title,description,target_value,period_start,period_end,status,source,updated_at,employees(team_lead_id,full_name)')
+      .select('id,employee_id,team_lead_target_id,title,description,target_value,period_start,period_end,target_year,is_continuing,status,source,recommendation_reason,updated_at,employees(team_lead_id,full_name)')
       .order('updated_at', { ascending: false }),
   ]);
 
@@ -965,26 +1061,43 @@ async function loadTeamWorkload() {
             .map(
               (item) => {
                 const employeeGoals = (employeeGoalsByEmployee.get(item.id) || []).slice(0, 25);
-                const selectedGoals = employeeGoals.filter((goal) => goal.status === 'selected' || goal.status === 'active');
-                const proposedGoals = employeeGoals.filter((goal) => goal.status === 'proposed').slice(0, 20);
+                const previousYearGoals = employeeGoals.filter((goal) => Number(goal.target_year) === PREVIOUS_YEAR);
+                const selectedGoals = employeeGoals.filter(
+                  (goal) => Number(goal.target_year) === NEXT_YEAR && (goal.status === 'selected' || goal.status === 'active')
+                );
+                const proposedGoals = employeeGoals
+                  .filter((goal) => Number(goal.target_year) === NEXT_YEAR && goal.status === 'proposed')
+                  .slice(0, 20);
+                const previousYearHtml = previousYearGoals.length
+                  ? `<div>${previousYearGoals
+                      .map(
+                        (goal) => `<div class="goal-item">
+                          <strong>${goal.title}</strong>
+                          <small>שנה: ${goal.target_year} | סטטוס: ${goal.status}</small>
+                          ${renderActionButtons('employee-target', goal.id)}
+                        </div>`
+                      )
+                      .join('')}</div>`
+                  : '<div class="recruitment-empty">לא הוזנו יעדים משנה קודמת.</div>';
                 const selectedHtml = selectedGoals.length
                   ? `<div>${selectedGoals
                       .map(
                         (goal) => `<div class="goal-item">
                           <strong>${goal.title}</strong>
-                          <small>סטטוס: ${goal.status}</small>
+                          <small>שנה: ${goal.target_year} | סטטוס: ${goal.status}${goal.is_continuing ? ' | מתמשך' : ''}</small>
                           ${renderActionButtons('employee-target', goal.id)}
                         </div>`
                       )
                       .join('')}</div>`
-                  : '<div class="recruitment-empty">אין יעדים שנבחרו לעובד.</div>';
+                  : '<div class="recruitment-empty">אין יעדים שנבחרו לשנה הקרובה.</div>';
 
                 const proposedHtml = proposedGoals.length
                   ? `<div>${proposedGoals
                       .map(
                         (goal) => `<div class="goal-item goal-item-proposed">
                           <strong>${goal.title}</strong>
-                          <small>הצעה אוטומטית</small>
+                          <small>הצעה אוטומטית AI | שנה: ${goal.target_year}${goal.is_continuing ? ' | יעד מתמשך' : ''}</small>
+                          <small>${goal.recommendation_reason || ''}</small>
                           <div class="goal-actions">
                             <button class="btn-inline" type="button" onclick="window.appActions.selectEmployeeGoal('${goal.id}', '${item.id}')">בחר ליעדים</button>
                             ${renderActionButtons('employee-target', goal.id)}
@@ -999,9 +1112,11 @@ async function loadTeamWorkload() {
                   <div class="employee-meta">${item.role_title || 'ללא תפקיד'}${item.start_date ? ` | התחלה: ${item.start_date}` : ''}</div>
                   <div class="employee-meta">${item.email || 'ללא מייל'}</div>
                   ${renderActionButtons('employee', item.id)}
-                  <div class="goals-head">יעדים שנבחרו (${selectedGoals.length}/3)</div>
+                  <div class="goals-head">יעדים משנה קודמת (${PREVIOUS_YEAR})</div>
+                  ${previousYearHtml}
+                  <div class="goals-head">יעדים שנבחרו לשנה הקרובה (${NEXT_YEAR}) (${selectedGoals.length}/3)</div>
                   ${selectedHtml}
-                  <div class="goals-head">הצעות אוטומטיות (עד 20)</div>
+                  <div class="goals-head">הצעות אוטומטיות AI לשנה הקרובה (${NEXT_YEAR}) (עד 20)</div>
                   <button class="btn-inline" type="button" onclick="window.appActions.generateEmployeeGoalSuggestions('${item.id}')">יצירת הצעות יעד</button>
                   ${proposedHtml}
                 </div>`;
@@ -1551,6 +1666,10 @@ function editEmployeeTarget(id) {
   form.elements.target_value.value = target.target_value ?? '';
   form.elements.period_start.value = target.period_start || '';
   form.elements.period_end.value = target.period_end || '';
+  if (form.elements.target_year) form.elements.target_year.value = String(target.target_year || NEXT_YEAR);
+  if (form.elements.status) form.elements.status.value = target.status || 'active';
+  if (form.elements.is_continuing) form.elements.is_continuing.checked = Boolean(target.is_continuing);
+  if (form.elements.recommendation_reason) form.elements.recommendation_reason.value = target.recommendation_reason || '';
   setFormMode('employee-target', true);
 }
 
@@ -1559,8 +1678,12 @@ async function generateEmployeeGoalSuggestionsAction(employeeId) {
   if (!employee) return;
 
   const existingTargets = (state.cache.records.employeeTargets || []).filter((item) => item.employee_id === employeeId);
-  const existingTitles = new Set(existingTargets.map((item) => String(item.title || '').trim().toLowerCase()));
-  const existingProposedCount = existingTargets.filter((item) => item.status === 'proposed').length;
+  const existingTitles = new Set(
+    existingTargets
+      .filter((item) => Number(item.target_year) === NEXT_YEAR)
+      .map((item) => String(item.title || '').trim().toLowerCase())
+  );
+  const existingProposedCount = existingTargets.filter((item) => item.status === 'proposed' && Number(item.target_year) === NEXT_YEAR).length;
   const availableSlots = Math.max(0, 20 - existingProposedCount);
   if (availableSlots <= 0) {
     showMessage('לעובד זה כבר קיימות 20 הצעות אוטומטיות.');
@@ -1585,14 +1708,17 @@ async function generateEmployeeGoalSuggestionsAction(employeeId) {
 
 async function selectEmployeeGoalAction(goalId, employeeId) {
   const selectedCount = (state.cache.records.employeeTargets || []).filter(
-    (item) => item.employee_id === employeeId && (item.status === 'selected' || item.status === 'active')
+    (item) =>
+      item.employee_id === employeeId &&
+      Number(item.target_year) === NEXT_YEAR &&
+      (item.status === 'selected' || item.status === 'active')
   ).length;
   if (selectedCount >= 3) {
     showMessage('ניתן לבחור עד 3 יעדים לעובד.');
     return;
   }
 
-  const { error } = await state.sb.from('employee_targets').update({ status: 'selected' }).eq('id', goalId);
+  const { error } = await state.sb.from('employee_targets').update({ status: 'selected', target_year: NEXT_YEAR }).eq('id', goalId);
   if (error) return showSupabaseError('בחירת יעד לעובד נכשלה', error);
 
   await loadGoals();
@@ -1865,16 +1991,22 @@ function wireForms() {
       target_value: form.elements.target_value.value ? Number(form.elements.target_value.value) : null,
       period_start: form.elements.period_start.value || null,
       period_end: form.elements.period_end.value || null,
-      status: 'active',
+      target_year: Number(form.elements.target_year.value || NEXT_YEAR),
+      status: form.elements.status.value || 'active',
+      is_continuing: form.elements.is_continuing.checked,
       source: 'manual',
+      recommendation_reason: form.elements.recommendation_reason.value || null,
     };
 
-    if (!form.elements.id.value) {
+    if (!form.elements.id.value && payload.status !== 'completed') {
       const activeCount = (state.cache.records.employeeTargets || []).filter(
-        (item) => item.employee_id === payload.employee_id && (item.status === 'selected' || item.status === 'active')
+        (item) =>
+          item.employee_id === payload.employee_id &&
+          Number(item.target_year) === payload.target_year &&
+          (item.status === 'selected' || item.status === 'active')
       ).length;
       if (activeCount >= 3) {
-        showMessage('ניתן לבחור/ליצור עד 3 יעדים פעילים לעובד.');
+        showMessage('ניתן לבחור/ליצור עד 3 יעדים פעילים לעובד בשנה נבחרת.');
         return;
       }
     }
